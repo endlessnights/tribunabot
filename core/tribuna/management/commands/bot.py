@@ -227,7 +227,7 @@ def callback_query(call):
                 callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
             )
             markup.add(accept_post, cancel_post)
-            bot.send_message(bot_admin, m.data, reply_markup=markup)
+            bot.send_message(bot_admin, f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\n{m.data}', reply_markup=markup)
             user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
@@ -270,7 +270,7 @@ def text_message(message):
                     callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=False"
                 )
                 markup.add(accept_post, cancel_post)
-                bot.send_message(bot_admin, post.data, reply_markup=markup)
+                bot.send_message(bot_admin, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}', reply_markup=markup)
 
 
 class Command(BaseCommand):
