@@ -31,7 +31,17 @@ class UserMessage(models.Model):
     data = models.TextField(max_length=4000, blank=True, null=True)
     anonym = models.BooleanField(default=False)
     sent = models.BooleanField(default=False)
-    accept = models.BooleanField(default=False)
+    status_choices = [
+        ('accept', 'Accept'),
+        ('wait', 'Wait'),
+        ('failed', 'Failed'),
+    ]
+    status = models.CharField(
+        verbose_name='Status',
+        max_length=8,
+        choices=status_choices,
+        default='wait',
+    )
 
     def __str__(self):
         return f"{self.user} - {self.type}"

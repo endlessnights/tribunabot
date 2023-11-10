@@ -51,13 +51,8 @@ def get_user_password_input(message):
             bot_password = find_bot_password.group(1).strip()
             read_pass_from_user = message.text
             if bot_password == read_pass_from_user:
-                p = Accounts.objects.get(tgid=message.chat.id)
-                #   Помечаем пользователя, что у него есть доступ к боту и получению настроек
-                p.has_access = True
-                #   Если пользователь пришел из клуба, ввел пароль из профиля, ставим тариф paid1
-                p.rateclass = 'paid1'
-                p.save()
-                bot.send_message(message.chat.id, 'has access')
+                #   Если пользователь пришел из клуба, ввел пароль из профиля
+                bot.send_message(message.chat.id, 'Пароль подошел! Чтобы написать пост, нажмите /new')
             else:
                 print(f'''user input: {read_pass_from_user},
 vas3k_profile_pass: {bot_password}''')
@@ -76,6 +71,14 @@ def get_club_profile(telegram_id):
         return club_profile_slug, club_full_name
     else:
         return None
+
+
+def show_keyboard_buttons(message):
+    if message.chat.id == bot_admin:
+        keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+        moderation = types.KeyboardButton(text=config.moderation_list)
+        keyboard.add(moderation)
+        return keyboard
 
 
 @bot.message_handler(commands=['start'])
@@ -139,7 +142,7 @@ def start_bot(message):
             p.has_access = True
             p.save()
     else:
-        bot.send_message(message.chat.id, config.hello_club_user)
+        bot.send_message(message.chat.id, config.hello_club_user, reply_markup=show_keyboard_buttons(message))
 
 
 @bot.message_handler(commands=['new'])
@@ -207,6 +210,12 @@ def callback_query(call):
         message_id = int(callback_data[2])
         anonym = callback_data[3].split('=')[1]
         m = UserMessage.objects.get(message_id=message_id)
+        if anonym == 'True':
+            m.anonym = True
+            m.save()
+        if anonym == 'False':
+            m.anonym = False
+            m.save()
         if not m.sent:
             markup = types.InlineKeyboardMarkup(row_width=2)
             accept_post = types.InlineKeyboardButton(
@@ -233,16 +242,35 @@ def callback_query(call):
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_message(test_channel_id, post_text)
                 user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
-                if anonym == 'True':
-                    m.anonym = True
-                else:
-                    m.anonym = False
                 m.sent = True
+                m.status = 'accept'
                 m.save()
         elif action == 'False':
             user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
+            m.status = 'failed'
+            m.sent = False
+            m.save()
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
+
+
+@bot.message_handler(content_types=['text'])
+def text_message(message):
+    if message.chat.id == bot_admin:
+        if message.text == config.moderation_list:
+            posts = UserMessage.objects.filter(status='wait')
+            for post in posts:
+                markup = types.InlineKeyboardMarkup(row_width=2)
+                accept_post = types.InlineKeyboardButton(
+                    text='✅',
+                    callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=True"
+                )
+                cancel_post = types.InlineKeyboardButton(
+                    text='❌',
+                    callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=False"
+                )
+                markup.add(accept_post, cancel_post)
+                bot.send_message(bot_admin, post.data, reply_markup=markup)
 
 
 class Command(BaseCommand):

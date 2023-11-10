@@ -24,6 +24,9 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'user',
+        'anonym',
+        'status',
+        'sent',
         'message_id',
         'type',
         'data',

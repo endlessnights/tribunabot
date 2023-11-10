@@ -37,3 +37,4 @@ anonym_text_post = '''
 
 {}
 '''
+moderation_list = 'Модерация постов'
