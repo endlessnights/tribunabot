@@ -176,28 +176,73 @@ def get_new_post(message):
     last_user_message[message.chat.id] = visibility_buttons.message_id
 
 
+# @bot.callback_query_handler(func=lambda call: True)
+# def callback_query(call):
+#     if str(call.data).startswith('send_post'):
+#         bot.answer_callback_query(call.id)
+#         callback_data = call.data.split(',')
+#         post_author = int(callback_data[1])
+#         message_id = int(callback_data[2])
+#         anonym = callback_data[3].split('=')[1]
+#         m = UserMessage.objects.get(message_id=message_id)
+#         if not m.sent:
+#             post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {post_author}\n{m.data}'
+#             bot.send_message(test_channel_id, post_text)
+#             user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено в Вастрик.Трибуна')
+#             if anonym == 'True':
+#                 m.anonym = True
+#             else:
+#                 m.anonym = False
+#             m.sent = True
+#             m.save()
+#         else:
+#             bot.send_message(call.message.chat.id, 'Сообщение уже было отправлено!')
+#         bot.delete_message(call.message.chat.id, last_user_message[call.message.chat.id])
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     if str(call.data).startswith('send_post'):
-        bot.answer_callback_query(call.id)
         callback_data = call.data.split(',')
         post_author = int(callback_data[1])
         message_id = int(callback_data[2])
         anonym = callback_data[3].split('=')[1]
         m = UserMessage.objects.get(message_id=message_id)
         if not m.sent:
-            post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {post_author}\n{m.data}'
-            bot.send_message(test_channel_id, post_text)
-            user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено в Вастрик.Трибуна')
-            if anonym == 'True':
-                m.anonym = True
-            else:
-                m.anonym = False
-            m.sent = True
-            m.save()
-        else:
-            bot.send_message(call.message.chat.id, 'Сообщение уже было отправлено!')
-        bot.delete_message(call.message.chat.id, last_user_message[call.message.chat.id])
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            accept_post = types.InlineKeyboardButton(
+                text='✅',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
+            )
+            cancel_post = types.InlineKeyboardButton(
+                text='❌',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+            )
+            markup.add(accept_post, cancel_post)
+            bot.send_message(bot_admin, m.data, reply_markup=markup)
+            user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
+        bot.delete_message(call.message.chat.id, call.message.id)
+        bot.answer_callback_query(call.id)
+    if str(call.data).startswith('post_accept_action'):
+        callback_data = call.data.split(',')
+        message_id = int(callback_data[1])
+        anonym = str(callback_data[2])
+        action = callback_data[3].split('=')[1]
+        m = UserMessage.objects.get(message_id=message_id)
+        if action == 'True':
+            if not m.sent:
+                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
+                bot.send_message(test_channel_id, post_text)
+                user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
+                if anonym == 'True':
+                    m.anonym = True
+                else:
+                    m.anonym = False
+                m.sent = True
+                m.save()
+        elif action == 'False':
+            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
+        bot.delete_message(call.message.chat.id, call.message.id)
+        bot.answer_callback_query(call.id)
 
 
 class Command(BaseCommand):
