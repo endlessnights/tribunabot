@@ -5,7 +5,7 @@ import requests
 from django.core.management import BaseCommand
 from django.utils import timezone
 from telebot import TeleBot, types
-from telebot.types import CallbackQuery
+from telebot.types import CallbackQuery, InputMediaPhoto
 
 from . import config
 from ...models import Accounts, UserMessage
@@ -145,6 +145,21 @@ def start_bot(message):
         bot.send_message(message.chat.id, config.hello_club_user, reply_markup=show_keyboard_buttons(message))
 
 
+def send_posts_markup(message):
+    m = UserMessage.objects.get(message_id=message.id)
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    send_public = types.InlineKeyboardButton(
+        text='Отправить пост публично',
+        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+    )
+    send_anonym = types.InlineKeyboardButton(
+        text='Отправить пост анонимно',
+        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=True"
+    )
+    markup.add(send_public, send_anonym)
+    return markup
+
+
 @bot.message_handler(commands=['new'])
 def new_post(message):
     try:
@@ -158,49 +173,33 @@ def new_post(message):
 
 
 def get_new_post(message):
-    p = Accounts.objects.get(tgid=message.chat.id)
-    UserMessage(
-        user=p,
-        data=message.text,
-        message_id=message.id
-    ).save()
-    m = UserMessage.objects.get(message_id=message.id)
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    send_public = types.InlineKeyboardButton(
-        text='Отправить пост публично',
-        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-    )
-    send_anonym = types.InlineKeyboardButton(
-        text='Отправить пост анонимно',
-        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=True"
-    )
-    markup.add(send_public, send_anonym)
-    visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста', reply_markup=markup)
-    last_user_message[message.chat.id] = visibility_buttons.message_id
+    if message.text:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        UserMessage(
+            user=p,
+            data=message.text,
+            message_id=message.id,
+            type='text',
+        ).save()
+        m = UserMessage.objects.get(message_id=message.id)
+        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                              reply_markup=send_posts_markup(message))
+        last_user_message[message.chat.id] = visibility_buttons.message_id
+    elif message.photo:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        caption = message.caption if message.caption else ""
+        UserMessage(
+            user=p,
+            data=caption,
+            file_ids=message.photo[-1].file_id,
+            message_id=message.id,
+            type='photo',
+        ).save()
+        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                              reply_markup=send_posts_markup(message))
+        last_user_message[message.chat.id] = visibility_buttons.message_id
+        # bot.send_photo(test_channel_id, message.photo[-1].file_id, caption=caption)
 
-
-# @bot.callback_query_handler(func=lambda call: True)
-# def callback_query(call):
-#     if str(call.data).startswith('send_post'):
-#         bot.answer_callback_query(call.id)
-#         callback_data = call.data.split(',')
-#         post_author = int(callback_data[1])
-#         message_id = int(callback_data[2])
-#         anonym = callback_data[3].split('=')[1]
-#         m = UserMessage.objects.get(message_id=message_id)
-#         if not m.sent:
-#             post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {post_author}\n{m.data}'
-#             bot.send_message(test_channel_id, post_text)
-#             user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено в Вастрик.Трибуна')
-#             if anonym == 'True':
-#                 m.anonym = True
-#             else:
-#                 m.anonym = False
-#             m.sent = True
-#             m.save()
-#         else:
-#             bot.send_message(call.message.chat.id, 'Сообщение уже было отправлено!')
-#         bot.delete_message(call.message.chat.id, last_user_message[call.message.chat.id])
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
@@ -216,19 +215,21 @@ def callback_query(call):
         if anonym == 'False':
             m.anonym = False
             m.save()
-        if not m.sent:
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            accept_post = types.InlineKeyboardButton(
-                text='✅',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
-            )
-            cancel_post = types.InlineKeyboardButton(
-                text='❌',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
-            )
-            markup.add(accept_post, cancel_post)
-            bot.send_message(bot_admin, f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\n{m.data}', reply_markup=markup)
-            user_succ_reply = bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        accept_post = types.InlineKeyboardButton(
+            text='✅',
+            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
+        )
+        cancel_post = types.InlineKeyboardButton(
+            text='❌',
+            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+        )
+        markup.add(accept_post, cancel_post)
+        if m.type == 'text':
+            bot.send_message(bot_admin, f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
+        elif m.type == 'photo':
+            bot.send_photo(bot_admin, m.file_ids, caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}\nАнонимность: {m.anonym}', reply_markup=markup)
+        bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
     if str(call.data).startswith('post_accept_action'):
@@ -238,13 +239,16 @@ def callback_query(call):
         action = callback_data[3].split('=')[1]
         m = UserMessage.objects.get(message_id=message_id)
         if action == 'True':
-            if not m.sent:
+            if m.type == 'text':
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_message(test_channel_id, post_text)
-                user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
-                m.sent = True
-                m.status = 'accept'
-                m.save()
+            elif m.type == 'photo':
+                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
+                bot.send_photo(test_channel_id, m.file_ids, post_text)
+            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
+            m.sent = True
+            m.status = 'accept'
+            m.save()
         elif action == 'False':
             user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
             m.status = 'failed'

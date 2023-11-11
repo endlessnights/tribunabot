@@ -27,8 +27,16 @@ class Accounts(models.Model):
 class UserMessage(models.Model):
     user = models.ForeignKey(Accounts, on_delete=models.CASCADE)
     message_id = models.CharField(max_length=30, blank=True, null=True)
-    type = models.CharField(max_length=30, blank=True, null=True)
+    type_choices = [
+        ('text', 'Text'),
+        ('photo', 'Photo'),
+        ('video', 'Video'),
+        ('poll', 'Poll'),
+    ]
+    type = models.CharField(max_length=6, choices=type_choices, default='text')
     data = models.TextField(max_length=4000, blank=True, null=True)
+    file_ids = models.CharField(max_length=1000, blank=True, null=True)
+    media_group = models.CharField(max_length=100, blank=True, null=True)
     anonym = models.BooleanField(default=False)
     sent = models.BooleanField(default=False)
     status_choices = [
@@ -45,3 +53,18 @@ class UserMessage(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.type}"
+
+
+class UserMessagePhoto(models.Model):
+    user_message = models.ForeignKey(UserMessage, related_name='photos', on_delete=models.CASCADE)
+    photo = models.ImageField(upload_to='user_photos/', blank=True)
+
+    def __str__(self):
+        return self.photo
+
+    def publish(self):
+        self.save()
+
+    class Meta:
+        verbose_name = 'Account'
+        verbose_name_plural = 'Accounts'
