@@ -23,7 +23,8 @@ try:
 except KeyError:
     print('NO CLUB_SERVICE_TOKEN_OUTLINE_BOT')
 
-bot = TeleBot(tg_token, threaded=False)
+bot = TeleBot(tg_token, threaded=True, num_threads=32)
+# bot = TeleBot(tg_token, threaded=False)
 club_service_token = club_service_token_os
 bot_admin = 326070831
 test_channel_id = '-1002139696426'
@@ -198,7 +199,19 @@ def get_new_post(message):
         visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
                                               reply_markup=send_posts_markup(message))
         last_user_message[message.chat.id] = visibility_buttons.message_id
-        # bot.send_photo(test_channel_id, message.photo[-1].file_id, caption=caption)
+    elif message.video:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        caption = message.caption if message.caption else ""
+        UserMessage(
+            user=p,
+            data=caption,
+            file_ids=message.video.file_id,
+            message_id=message.id,
+            type='video',
+        ).save()
+        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                              reply_markup=send_posts_markup(message))
+        last_user_message[message.chat.id] = visibility_buttons.message_id
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -226,9 +239,15 @@ def callback_query(call):
         )
         markup.add(accept_post, cancel_post)
         if m.type == 'text':
-            bot.send_message(bot_admin, f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
+            bot.send_message(bot_admin,
+                             f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
         elif m.type == 'photo':
-            bot.send_photo(bot_admin, m.file_ids, caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}\nАнонимность: {m.anonym}', reply_markup=markup)
+            bot.send_photo(bot_admin, m.file_ids,
+                           caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}\nАнонимность: {m.anonym}', reply_markup=markup)
+        elif m.type == 'video':
+            bot.send_video(bot_admin, m.file_ids,
+                           caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}',
+                           reply_markup=markup)
         bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
@@ -245,6 +264,9 @@ def callback_query(call):
             elif m.type == 'photo':
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_photo(test_channel_id, m.file_ids, post_text)
+            elif m.type == 'video':
+                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
+                bot.send_video(test_channel_id, m.file_ids, caption=post_text)
             user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
             m.sent = True
             m.status = 'accept'
@@ -274,7 +296,17 @@ def text_message(message):
                     callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=False"
                 )
                 markup.add(accept_post, cancel_post)
-                bot.send_message(bot_admin, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}', reply_markup=markup)
+                if post.type == 'text':
+                    bot.send_message(bot_admin, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}\nАнонимность: {post.anonym}',
+                                     reply_markup=markup)
+                elif post.type == 'photo':
+                    bot.send_photo(bot_admin, post.file_ids,
+                                   caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
+                                   reply_markup=markup)
+                elif post.type == 'video':
+                    bot.send_video(bot_admin, post.file_ids,
+                                   caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
+                                   reply_markup=markup)
 
 
 class Command(BaseCommand):
