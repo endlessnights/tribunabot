@@ -228,7 +228,7 @@ def callback_query(call):
         if anonym == 'False':
             m.anonym = False
             m.save()
-        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup = types.InlineKeyboardMarkup(row_width=3)
         accept_post = types.InlineKeyboardButton(
             text='✅',
             callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
@@ -237,7 +237,11 @@ def callback_query(call):
             text='❌',
             callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
         )
-        markup.add(accept_post, cancel_post)
+        block_user = types.InlineKeyboardButton(
+            text='Block User',
+            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+        )
+        markup.add(accept_post, cancel_post, block_user)
         if m.type == 'text':
             bot.send_message(bot_admin,
                              f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
@@ -276,6 +280,9 @@ def callback_query(call):
             m.status = 'failed'
             m.sent = False
             m.save()
+        elif action == 'Block':
+            print(m.user.tgname, 'ToBlock')
+            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
 
