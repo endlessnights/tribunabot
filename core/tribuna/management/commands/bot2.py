@@ -146,8 +146,8 @@ def start_bot(message):
         bot.send_message(message.chat.id, config.hello_club_user, reply_markup=show_keyboard_buttons(message))
 
 
-def send_posts_markup(message):
-    m = UserMessage.objects.get(message_id=message.id)
+def send_posts_markup(message, first_msg_id):
+    m = UserMessage.objects.get(message_id=first_msg_id)
     markup = types.InlineKeyboardMarkup(row_width=1)
     send_public = types.InlineKeyboardButton(
         text='Отправить пост публично',
@@ -163,10 +163,13 @@ def send_posts_markup(message):
 
 @bot.message_handler(commands=['new'])
 def new_post(message):
+    send_to_moderate = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    send_to_moderate_btn = types.KeyboardButton(text=config.send_to_moderate)
+    send_to_moderate.add(send_to_moderate_btn)
     try:
         p = Accounts.objects.get(tgid=message.chat.id)
         if p.has_access:
-            new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip)
+            new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip, reply_markup=send_to_moderate)
             p.get_content = True
             p.save()
     except Exception as e:
@@ -174,35 +177,13 @@ def new_post(message):
         print(e)
 
 
-def get_new_post(message):
-    if message.text:
-        p = Accounts.objects.get(tgid=message.chat.id)
-        UserMessage(
-            user=p,
-            data=message.text,
-            message_id=message.id,
-            type='text',
-        ).save()
-        m = UserMessage.objects.get(message_id=message.id)
-        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message))
-        last_user_message[message.chat.id] = visibility_buttons.message_id
-    elif message.photo:
-        p = Accounts.objects.get(tgid=message.chat.id)
+@bot.message_handler(content_types=['video'])
+def video_message(message):
+    p = Accounts.objects.get(tgid=message.chat.id)
+    if p.get_content:
         caption = message.caption if message.caption else ""
-        UserMessage(
-            user=p,
-            data=caption,
-            file_ids=message.photo[-1].file_id,
-            message_id=message.id,
-            type='photo',
-        ).save()
-        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message))
-        last_user_message[message.chat.id] = visibility_buttons.message_id
-    elif message.video:
-        p = Accounts.objects.get(tgid=message.chat.id)
-        caption = message.caption if message.caption else ""
+        p.get_content = False
+        p.save()
         UserMessage(
             user=p,
             data=caption,
@@ -211,8 +192,57 @@ def get_new_post(message):
             type='video',
         ).save()
         visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message))
+                                              reply_markup=send_posts_markup(message, message.id))
         last_user_message[message.chat.id] = visibility_buttons.message_id
+
+
+@bot.message_handler(content_types=['photo'])
+def photo_message(message):
+    try:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        if p.has_access and p.get_content:
+            # Check if the user_photos dictionary has an entry for the user
+            if message.chat.id not in user_photos:
+                user_photos[message.chat.id] = {'count': 0, 'photos': []}
+            # Increment the count of photos sent by the user
+            user_photos[message.chat.id]['count'] += 1
+            # Store the message_id and file_id of the photo
+            user_photos[message.chat.id]['photos'].append({
+                'message_id': message.message_id,
+                'file_id': message.photo[-1].file_id
+            })
+            # If the user has sent 10 photos, disable further photo sending
+            if user_photos[message.chat.id]['count'] >= 10:
+                p.get_content = False
+                p.save()
+                bot.send_message(message.chat.id,
+                                 "You have reached the maximum limit of 10 photos. Photo sending is now disabled.")
+                # Create a UserMessage record with the available photos
+                create_user_message_record(p, user_photos[message.chat.id]['photos'])
+    except Exception as e:
+        print(f'photo_message: {e}')
+
+
+def create_user_message_record(p, photos):
+    first_photo_info = photos[0]
+    UserMessage(
+        user=p,
+        message_id=first_photo_info['message_id'],
+        file_ids=','.join(photo['file_id'] for photo in photos),
+        type='photo',
+    ).save()
+    m = UserMessage.objects.get(message_id=first_photo_info['message_id'])
+    user_photos.pop(p.tgid, None)
+    user_id = m.user.tgid
+    message_id = m.message_id
+    send_media_group_test_func(user_id, message_id)
+
+
+def send_media_group_test_func(user_id, message_id):
+    m = UserMessage.objects.get(message_id=message_id)
+    media_list = str(m.file_ids)
+    media_list = [item.strip() for item in media_list.split(",")]
+    bot.send_media_group(user_id, [InputMediaPhoto(media=item) for item in media_list])
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -247,8 +277,11 @@ def callback_query(call):
             bot.send_message(bot_admin,
                              f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
         elif m.type == 'photo':
-            bot.send_photo(bot_admin, m.file_ids,
-                           caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}\nАнонимность: {m.anonym}', reply_markup=markup)
+            media_list = str(m.file_ids)
+            media_list = [item.strip() for item in media_list.split(",")]
+            caption = f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}'
+            bot.send_media_group(m.user.tgid, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+            bot.send_message(bot_admin, 'Показываю кнопки', reply_markup=markup)
         elif m.type == 'video':
             bot.send_video(bot_admin, m.file_ids,
                            caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}',
@@ -292,69 +325,9 @@ def callback_query(call):
 user_photos = {}
 
 
-@bot.message_handler(content_types=['photo'])
-def photo_message(message):
-    try:
-        p = Accounts.objects.get(tgid=message.chat.id)
-        if p.has_access and p.get_content:
-            # Check if the user_photos dictionary has an entry for the user
-            if message.chat.id not in user_photos:
-                user_photos[message.chat.id] = {'count': 0, 'photos': []}
-            # Increment the count of photos sent by the user
-            user_photos[message.chat.id]['count'] += 1
-            # Store the message_id and file_id of the photo
-            user_photos[message.chat.id]['photos'].append({
-                'message_id': message.message_id,
-                'file_id': message.photo[-1].file_id
-            })
-            # If the user has sent 10 photos, disable further photo sending
-            if user_photos[message.chat.id]['count'] >= 10:
-                p.get_content = False
-                p.save()
-                bot.send_message(message.chat.id,
-                                 "You have reached the maximum limit of 10 photos. Photo sending is now disabled.")
-                # Create a UserMessage record with the available photos
-                create_user_message_record(p, user_photos[message.chat.id]['photos'])
-    except Exception as e:
-        print(f'photo_message: {e}')
-
-
-@bot.message_handler(func=lambda message: message.text == 'stop')
-def stop_sending_photos(message):
-    p = Accounts.objects.get(tgid=message.chat.id)
-    if p.get_content:
-        p.get_content = False
-        p.save()
-        bot.send_message(message.chat.id, "Photo sending is now disabled.")
-        if message.chat.id in user_photos:
-            create_user_message_record(p, user_photos[message.chat.id]['photos'])
-    else:
-        bot.send_message(message.chat.id, "Photo sending is already disabled.")
-
-
-def create_user_message_record(p, photos):
-    first_photo_info = photos[0]
-    UserMessage(
-        user=p,
-        message_id=first_photo_info['message_id'],
-        file_ids=','.join(photo['file_id'] for photo in photos),
-    ).save()
-    m = UserMessage.objects.get(message_id=first_photo_info['message_id'])
-    user_photos.pop(p.tgid, None)
-    user_id = m.user.tgid
-    message_id = m.message_id
-    send_media_group_test_func(user_id, message_id)
-
-
-def send_media_group_test_func(user_id, message_id):
-    m = UserMessage.objects.get(message_id=message_id)
-    media_list = str(m.file_ids)
-    media_list = [item.strip() for item in media_list.split(",")]
-    bot.send_media_group(user_id, [InputMediaPhoto(media=item) for item in media_list])
-
-
 @bot.message_handler(content_types=['text'])
 def text_message(message):
+    p = Accounts.objects.get(tgid=message.chat.id)
     if message.chat.id == bot_admin:
         if message.text == config.moderation_list:
             posts = UserMessage.objects.filter(status='wait')
@@ -380,6 +353,37 @@ def text_message(message):
                     bot.send_video(bot_admin, post.file_ids,
                                    caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
                                    reply_markup=markup)
+    remove_reply_markup = types.ReplyKeyboardRemove()
+    if message.text == config.send_to_moderate:
+        if p.get_content:
+            p.get_content = False
+            p.save()
+            if message.chat.id in user_photos:
+                create_user_message_record(p, user_photos[message.chat.id]['photos'])
+                photos = user_photos[message.chat.id]['photos']
+                first_message_id = photos[0]
+                first_msg_id = first_message_id['message_id']
+                bot.send_message(message.chat.id,
+                                 "Пост отправлен на модерацию!",
+                                 reply_markup=send_posts_markup(message, first_msg_id))
+                bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+        else:
+            print('Photo sending is already disabled.')
+    if message.text != config.send_to_moderate and p.get_content:
+        p.get_content = False
+        p.save()
+        UserMessage(
+            user=p,
+            data=message.text,
+            message_id=message.id,
+            type='text',
+        ).save()
+        m = UserMessage.objects.get(message_id=message.id)
+        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                              reply_markup=send_posts_markup(message, message.id))
+        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+        last_user_message[message.chat.id] = visibility_buttons.message_id
+
 
 
 class Command(BaseCommand):

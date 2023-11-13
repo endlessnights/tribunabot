@@ -38,3 +38,4 @@ anonym_text_post = '''
 {}
 '''
 moderation_list = 'Модерация постов'
+send_to_moderate = 'Отправить пост на модерацию'
