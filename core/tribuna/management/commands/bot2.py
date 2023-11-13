@@ -221,6 +221,7 @@ def photo_message(message):
                                  "You have reached the maximum limit of 10 photos. Photo sending is now disabled.")
                 # Create a UserMessage record with the available photos
                 create_user_message_record(p, user_photos[message.chat.id]['photos'], caption)
+                user_photos.pop(message.chat.id)
     except Exception as e:
         print(f'photo_message: {e}')
 
@@ -304,8 +305,10 @@ def callback_query(call):
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_message(test_channel_id, post_text)
             elif m.type == 'photo':
-                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_photo(test_channel_id, m.file_ids, post_text)
+                media_list = str(m.file_ids)
+                media_list = [item.strip() for item in media_list.split(",")]
+                caption = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
+                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
             elif m.type == 'video':
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_video(test_channel_id, m.file_ids, caption=post_text)
@@ -350,9 +353,13 @@ def text_message(message):
                     bot.send_message(bot_admin, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}\nАнонимность: {post.anonym}',
                                      reply_markup=markup)
                 elif post.type == 'photo':
-                    bot.send_photo(bot_admin, post.file_ids,
-                                   caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
-                                   reply_markup=markup)
+
+                    media_list = str(post.file_ids)
+                    media_list = [item.strip() for item in media_list.split(",")]
+                    caption = f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}'
+                    bot.send_media_group(post.user.tgid,
+                                         [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+                    bot.send_message(bot_admin, 'Показываю кнопки', reply_markup=markup)
                 elif post.type == 'video':
                     bot.send_video(bot_admin, post.file_ids,
                                    caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
@@ -389,7 +396,6 @@ def text_message(message):
                                               reply_markup=send_posts_markup(message, message.id))
         bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
         last_user_message[message.chat.id] = visibility_buttons.message_id
-
 
 
 class Command(BaseCommand):
