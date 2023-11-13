@@ -13,7 +13,6 @@ class Accounts(models.Model):
     is_admin = models.BooleanField(verbose_name='Bot admin', default=False)
     has_access = models.BooleanField(verbose_name='Has access', default=False)
     get_content = models.BooleanField(default=False)
-    user_photos = models.JSONField(default=dict)
 
     def __str__(self):
         return str(self.tgid)

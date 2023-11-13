@@ -35,6 +35,8 @@ headers = {
 
 last_user_message = {}
 
+bot_admins = Accounts.objects.filter(is_admin=True)
+
 
 def delete_prev_message(message):
     if message.chat.id in last_user_message:
@@ -75,7 +77,7 @@ def get_club_profile(telegram_id):
 
 
 def show_keyboard_buttons(message):
-    if message.chat.id == bot_admin:
+    if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
         keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
         moderation = types.KeyboardButton(text=config.moderation_list)
         keyboard.add(moderation)
@@ -279,18 +281,21 @@ def callback_query(call):
         )
         markup.add(accept_post, cancel_post, block_user)
         if m.type == 'text':
-            bot.send_message(bot_admin,
-                             f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
+            for admin in bot_admins:
+                bot.send_message(admin.tgid,
+                                 f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
         elif m.type == 'photo':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}'
-            bot.send_media_group(m.user.tgid, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
-            bot.send_message(bot_admin, 'Показываю кнопки', reply_markup=markup)
+            for admin in bot_admins:
+                bot.send_media_group(admin.tgid, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+                bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
         elif m.type == 'video':
-            bot.send_video(bot_admin, m.file_ids,
-                           caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}',
-                           reply_markup=markup)
+            for admin in bot_admins:
+                bot.send_video(admin.tgid, m.file_ids,
+                               caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}',
+                               reply_markup=markup)
         bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
@@ -335,7 +340,7 @@ user_photos = {}
 @bot.message_handler(content_types=['text'])
 def text_message(message):
     p = Accounts.objects.get(tgid=message.chat.id)
-    if message.chat.id == bot_admin:
+    if message.chat.id in bot_admins:
         if message.text == config.moderation_list:
             posts = UserMessage.objects.filter(status='wait')
             for post in posts:
@@ -348,22 +353,29 @@ def text_message(message):
                     text='❌',
                     callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=False"
                 )
-                markup.add(accept_post, cancel_post)
+                block_user = types.InlineKeyboardButton(
+                    text='Block User',
+                    callback_data=f"post_accept_action,{m.message_id},{str(post.anonym)},accept=Block"
+                )
+                markup.add(accept_post, cancel_post, block_user)
                 if post.type == 'text':
-                    bot.send_message(bot_admin, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}\nАнонимность: {post.anonym}',
-                                     reply_markup=markup)
+                    for admin in bot_admins:
+                        bot.send_message(admin.tgid, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}\nАнонимность: {post.anonym}',
+                                         reply_markup=markup)
                 elif post.type == 'photo':
 
                     media_list = str(post.file_ids)
                     media_list = [item.strip() for item in media_list.split(",")]
                     caption = f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}'
-                    bot.send_media_group(post.user.tgid,
-                                         [InputMediaPhoto(media=item, caption=caption) for item in media_list])
-                    bot.send_message(bot_admin, 'Показываю кнопки', reply_markup=markup)
+                    for admin in bot_admins:
+                        bot.send_media_group(admin.tgid,
+                                             [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+                        bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
                 elif post.type == 'video':
-                    bot.send_video(bot_admin, post.file_ids,
-                                   caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
-                                   reply_markup=markup)
+                    for admin in bot_admins:
+                        bot.send_video(admin.tgid, post.file_ids,
+                                       caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
+                                       reply_markup=markup)
     remove_reply_markup = types.ReplyKeyboardRemove()
     if message.text == config.send_to_moderate:
         if p.get_content:
