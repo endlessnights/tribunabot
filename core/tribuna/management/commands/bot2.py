@@ -149,7 +149,7 @@ def start_bot(message):
             try:
                 p = Accounts.objects.get(tgid=message.chat.id)
                 if p.has_access:
-                    bot.send_message(message.chat.id, config.hello_new_user)
+                    bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
                 else:
                     get_user_password = bot.send_message(
                         message.chat.id, f'{config.start_text_new.format(p.tgname)}\n{config.ask_password}',
@@ -164,7 +164,7 @@ def start_bot(message):
             p.has_access = True
             p.save()
     else:
-        bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message))
+        bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message), parse_mode='HTML')
 
 
 def send_posts_markup(message, first_msg_id):
@@ -217,11 +217,11 @@ def photo_message(message):
                 'caption': caption
             })
             # If the user has sent 10 photos, disable further photo zsending
-            if user_photos[message.chat.id]['count'] >= 10:
+            if user_photos[message.chat.id]['count'] > 10:
                 p.get_content = False
                 p.save()
                 bot.send_message(message.chat.id,
-                                 "You have reached the maximum limit of 10 photos. Photo sending is now disabled.")
+                                 config.photo_limit)
                 # Create a UserMessage record with the available photos
                 create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption)
                 user_photos.pop(message.chat.id)
@@ -258,12 +258,12 @@ def video_message(message):
                 'file_id': message.video.file_id,
                 'caption': caption
             })
-            # If the user has sent 10 photos, disable further photo zsending
-            if user_videos[message.chat.id]['count'] >= 10:
+            # If the user has sent 10 photos, disable further photo sending
+            if user_videos[message.chat.id]['count'] > 10:
                 p.get_content = False
                 p.save()
                 bot.send_message(message.chat.id,
-                                 "You have reached the maximum limit of 10 videos. Video sending is now disabled.")
+                                 config.video_limit)
                 # Create a UserMessage record with the available photos
                 create_video_message_record(p, user_videos[message.chat.id]['videos'], caption)
                 user_videos.pop(message.chat.id)
@@ -297,7 +297,7 @@ def callback_query(call):
         if anonym == 'False':
             m.anonym = False
             m.save()
-        markup = types.InlineKeyboardMarkup(row_width=3)
+        markup = types.InlineKeyboardMarkup(row_width=2)
         accept_post = types.InlineKeyboardButton(
             text='✅',
             callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
@@ -306,11 +306,15 @@ def callback_query(call):
             text='❌',
             callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
         )
+        warn_delete_post = types.InlineKeyboardButton(
+            text='Удалить и предупредить',
+            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
+        )
         block_user = types.InlineKeyboardButton(
-            text='Block User',
+            text='Заблокировать юзера',
             callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
         )
-        markup.add(accept_post, cancel_post, block_user)
+        markup.add(accept_post, cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
             for admin in bot_admins:
                 bot.send_message(admin.tgid,
@@ -346,14 +350,14 @@ def callback_query(call):
             if m.type == 'text':
                 post_text = (
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
-                        m.user.clubname, m.user.clublogin, m.user.clublogin, m.data))
+                        m.data, m.user.clubname, m.user.clublogin, m.user.clublogin, ))
                 bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             elif m.type == 'photo' or 'video':
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
                 caption = (
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
-                        m.user.clubname, m.user.clublogin, m.user.clublogin, m.data))
+                        m.data, m.user.clubname, m.user.clublogin, m.user.clublogin))
                 bot.send_media_group(test_channel_id, [
                     InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
                     index, item in
@@ -442,6 +446,8 @@ def text_message(message):
                 non_empty_caption = find_non_empty_caption(photos)
                 if non_empty_caption == None:
                     bot.send_message(message.chat.id, config.forbidden_types)
+                    p.get_content = False
+                    p.save()
                 else:
                     create_photo_message_record(p, user_photos[message.chat.id]['photos'],
                                                 caption=non_empty_caption if non_empty_caption != None else None)
@@ -462,6 +468,8 @@ def text_message(message):
                 non_empty_caption = find_non_empty_caption(videos)
                 if non_empty_caption == None:
                     bot.send_message(message.chat.id, config.forbidden_types)
+                    p.get_content = False
+                    p.save()
                 else:
                     create_video_message_record(p, user_videos[message.chat.id]['videos'],
                                                 caption=non_empty_caption if non_empty_caption != None else None)

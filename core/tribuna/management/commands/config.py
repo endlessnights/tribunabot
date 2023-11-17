@@ -35,15 +35,11 @@ forbidden_types = '''
 '''
 
 public_text_post = '''
-©️{} (<a href="https://vas3k.club/user/{}">{}</a>)
-
 {}
-
+©️{} (<a href="https://vas3k.club/user/{}">{}</a>)
 Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
 '''
 anonym_text_post = '''
-Анонимная запись в <a href="https://t.me/+LHnmfbNIdM9kNmNi">Вастрик.Трибуна</a>!
-
 {}
 
 Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
@@ -51,3 +47,5 @@ anonym_text_post = '''
 moderation_list = 'Модерация постов'
 send_to_moderate = 'Запостить'
 post_sent = 'Сообщение отправлено в <a href="https://t.me/+LHnmfbNIdM9kNmNi">Вастрик.Трибуна</a>'
+photo_limit = 'Максимальное количество фото для отправки за один раз - 10. Для повторной отправки нажмите /now'
+video_limit = 'Максимальное количество видео для отправки за один раз - 10. Для повторной отправки нажмите /now'
