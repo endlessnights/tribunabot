@@ -142,14 +142,14 @@ def start_bot(message):
             p = Accounts.objects.get(tgid=message.chat.id)
             p.has_access = True
             club_profile_slug, club_full_name = club_profile_info
-            bot.send_message(message.chat.id, config.hello_club_new_user)
+            bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
         #   Если бот не привязан, то запрашиваем пароль (указан в профиле клуба)
         #   Или если сайт vas3k клуба возвращает не 200
         else:
             try:
                 p = Accounts.objects.get(tgid=message.chat.id)
                 if p.has_access:
-                    bot.send_message(message.chat.id, config.hello_club_new_user)
+                    bot.send_message(message.chat.id, config.hello_new_user)
                 else:
                     get_user_password = bot.send_message(
                         message.chat.id, f'{config.start_text_new.format(p.tgname)}\n{config.ask_password}',
@@ -164,7 +164,7 @@ def start_bot(message):
             p.has_access = True
             p.save()
     else:
-        bot.send_message(message.chat.id, config.hello_club_user, reply_markup=show_keyboard_buttons(message))
+        bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message))
 
 
 def send_posts_markup(message, first_msg_id):
@@ -405,7 +405,7 @@ def text_message(message):
                 )
                 block_user = types.InlineKeyboardButton(
                     text='Block User',
-                    callback_data=f"post_accept_action,{m.message_id},{str(post.anonym)},accept=Block"
+                    callback_data=f"post_accept_action,{post.message_id},{str(post.anonym)},accept=Block"
                 )
                 markup.add(accept_post, cancel_post, block_user)
                 if post.type == 'text':
@@ -424,17 +424,17 @@ def text_message(message):
                                                                            for item in media_list])
                         bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
     remove_reply_markup = types.ReplyKeyboardRemove()
-    #   Если нажата кнопка "Отправить пост на модерацию"
+    #   Если нажата кнопка "Запостить"
     if message.text == config.send_to_moderate:
         if p.get_content:
-            #   Если отправляется фото или стопка фото
+            #   Если отправляется фото, видео или стопка фото, видео
             if message.chat.id in user_photos:
                 create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption=None)
                 photos = user_photos[message.chat.id]['photos']
                 first_message_id = photos[0]
                 first_msg_id = first_message_id['message_id']
                 bot.send_message(message.chat.id,
-                                 "Пост будет отправлен на модерацию!",
+                                 config.post_sent,
                                  reply_markup=send_posts_markup(message, first_msg_id))
                 bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
                 user_photos.pop(message.chat.id)
@@ -443,11 +443,10 @@ def text_message(message):
             elif message.chat.id in user_videos:
                 create_video_message_record(p, user_videos[message.chat.id]['videos'], caption=None)
                 videos = user_videos[message.chat.id]['videos']
-                print(videos)
                 first_message_id = videos[0]
                 first_msg_id = first_message_id['message_id']
                 bot.send_message(message.chat.id,
-                                 "Пост будет отправлен на модерацию!",
+                                 config.post_sent,
                                  reply_markup=send_posts_markup(message, first_msg_id))
                 bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
                 user_videos.pop(message.chat.id)
