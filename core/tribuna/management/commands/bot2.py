@@ -214,7 +214,6 @@ def photo_message(message):
                 'message_id': message.message_id,
                 'file_id': message.photo[-1].file_id
             })
-            print(user_photos[message.chat.id]['photos'])
             # If the user has sent 10 photos, disable further photo zsending
             caption = message.caption if message.caption else ""
             if user_photos[message.chat.id]['count'] >= 10:
@@ -232,7 +231,6 @@ def photo_message(message):
 # create_user_message_record
 def create_photo_message_record(p, photos, caption):
     first_photo_info = photos[0]
-    print(first_photo_info)
     UserMessage(
         user=p,
         message_id=first_photo_info['message_id'],
@@ -293,7 +291,6 @@ def video_message(message):
 # create_user_message_record
 def create_video_message_record(p, videos, caption):
     first_video_info = videos[0]
-    print(first_video_info)
     UserMessage(
         user=p,
         message_id=first_video_info['message_id'],
@@ -334,17 +331,22 @@ def callback_query(call):
         if m.type == 'text':
             for admin in bot_admins:
                 bot.send_message(admin.tgid,
-                                 f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}',
-                                 reply_markup=markup)
+                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                 reply_markup=markup,
+                                 parse_mode='HTML')
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
-            caption = f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}'
+            caption = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
             for admin in bot_admins:
                 bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption) for item in
                                                   media_list] if m.type == 'video' else [
-                    InputMediaPhoto(media=item, caption=caption) for item in media_list])
-                bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
+                    InputMediaPhoto(media=item, caption=caption, parse_mode='HTML') for item in media_list])
+                bot.send_message(admin.tgid,
+                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}',
+                                 reply_markup=markup,
+                                 parse_mode='HTML',
+                                 disable_web_page_preview=True)
         bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
@@ -356,8 +358,9 @@ def callback_query(call):
         m = UserMessage.objects.get(message_id=message_id)
         if action == 'True':
             if m.type == 'text':
-                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_message(test_channel_id, post_text)
+                # post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
+                post_text = (config.anonym_text_post.format(m.data) if anonym else config.public_text_post.format(m.user.clubname, m.user.clublogin, m.data))
+                bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             elif m.type == 'photo' or 'video':
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
@@ -390,7 +393,7 @@ user_videos = {}
 def text_message(message):
     #   Показываем посты на ПреМодерации админам бота
     p = Accounts.objects.get(tgid=message.chat.id)
-    if message.chat.id in bot_admins:
+    if str(message.chat.id) in str(bot_admins):
         if message.text == config.moderation_list:
             posts = UserMessage.objects.filter(status='wait')
             for post in posts:
@@ -422,7 +425,11 @@ def text_message(message):
                                              [InputMediaPhoto(media=item, caption=caption) for item in media_list]
                                              if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption)
                                                                            for item in media_list])
-                        bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
+                        bot.send_message(admin.tgid,
+                                         f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}',
+                                         reply_markup=markup,
+                                         parse_mode='HTML',
+                                         disable_web_page_preview=True)
     remove_reply_markup = types.ReplyKeyboardRemove()
     #   Если нажата кнопка "Запостить"
     if message.text == config.send_to_moderate:
@@ -435,7 +442,9 @@ def text_message(message):
                 first_msg_id = first_message_id['message_id']
                 bot.send_message(message.chat.id,
                                  config.post_sent,
-                                 reply_markup=send_posts_markup(message, first_msg_id))
+                                 reply_markup=send_posts_markup(message, first_msg_id),
+                                 parse_mode='HTML',
+                                 disable_web_page_preview=True)
                 bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
                 user_photos.pop(message.chat.id)
                 p.get_content = False

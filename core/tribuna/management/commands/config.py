@@ -27,13 +27,18 @@ new_post_tooltip = '''
 ❌ Не поддерживаются стикеры, GIF, музыка, аудиосообщения, кружочки, файлы.
 '''
 public_text_post = '''
-©️@username ({})
-{}
-'''
-anonym_text_post = '''
-Новая запись в Вастрик.Трибуна!
+©️{} ({})
 
 {}
+
+Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
+'''
+anonym_text_post = '''
+Анонимная запись в <a href="https://t.me/+LHnmfbNIdM9kNmNi">Вастрик.Трибуна</a>!
+
+{}
+
+Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
 '''
 moderation_list = 'Модерация постов'
 send_to_moderate = 'Запостить'
