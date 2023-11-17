@@ -299,30 +299,40 @@ def callback_query(call):
         if anonym == 'False':
             m.anonym = False
             m.save()
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        accept_post = types.InlineKeyboardButton(
-            text='✅',
-            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
-        )
-        cancel_post = types.InlineKeyboardButton(
-            text='❌',
-            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
-        )
-        warn_delete_post = types.InlineKeyboardButton(
-            text='Удалить и предупредить',
-            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
-        )
-        block_user = types.InlineKeyboardButton(
-            text='Заблокировать юзера',
-            callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
-        )
-        markup.add(accept_post, cancel_post, warn_delete_post, block_user)
+        #   Если отключена возможность отправки анонимный постов в настройках, то все посты будут публичные
+        if not bot_settings.anonym_func:
+            m.anonym = False
+            m.save()
+        if bot_settings.pre_moder:
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            accept_post = types.InlineKeyboardButton(
+                text='✅',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
+            )
+            cancel_post = types.InlineKeyboardButton(
+                text='❌',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+            )
+            warn_delete_post = types.InlineKeyboardButton(
+                text='Удалить и предупредить',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
+            )
+            block_user = types.InlineKeyboardButton(
+                text='Заблокировать юзера',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+            )
+            markup.add(accept_post, cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
             for admin in bot_admins:
-                bot.send_message(admin.tgid,
-                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
-                                 reply_markup=markup,
-                                 parse_mode='HTML')
+                if bot_settings.pre_moder:
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     reply_markup=markup,
+                                     parse_mode='HTML')
+                else:
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     parse_mode='HTML')
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
@@ -334,11 +344,17 @@ def callback_query(call):
                                       enumerate(media_list)] if m.type == 'video' else [
                                          InputMediaPhoto(media=item, caption=caption if index == 0 else None,
                                                          parse_mode='HTML') for index, item in enumerate(media_list)])
-                bot.send_message(admin.tgid,
-                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
-                                 reply_markup=markup,
-                                 parse_mode='HTML',
-                                 disable_web_page_preview=True)
+                if bot_settings.pre_moder:
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     reply_markup=markup,
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
+                else:
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
         bot.send_message(call.message.chat.id, config.post_sent, parse_mode='HTML')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
