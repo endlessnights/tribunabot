@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Accounts, UserMessage
+from .models import Accounts, UserMessage, BotSettings
 
 
 @admin.register(Accounts)
@@ -31,4 +31,13 @@ class MessageAdmin(admin.ModelAdmin):
         'type',
         'data',
 
+    ]
+
+
+@admin.register(BotSettings)
+class BotSettingsAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'anonym_func',
+        'pre_moder',
     ]

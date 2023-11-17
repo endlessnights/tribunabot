@@ -1,6 +1,14 @@
 from django.db import models
 
 
+class BotSettings(models.Model):
+    anonym_func = models.BooleanField(default=False)
+    pre_moder = models.BooleanField(default=False)
+
+    def __str__(self):
+        return str(self.id)
+
+
 class Accounts(models.Model):
     tgid = models.CharField(verbose_name='ID пользователя', max_length=48, null=True, unique=True, blank=True)
     tglogin = models.CharField(verbose_name='TG Username', blank=True, max_length=100, null=True)
