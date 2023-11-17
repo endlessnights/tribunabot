@@ -343,7 +343,7 @@ def callback_query(call):
                                                   media_list] if m.type == 'video' else [
                     InputMediaPhoto(media=item, caption=caption, parse_mode='HTML') for item in media_list])
                 bot.send_message(admin.tgid,
-                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}',
+                                 f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                  reply_markup=markup,
                                  parse_mode='HTML',
                                  disable_web_page_preview=True)
@@ -426,7 +426,7 @@ def text_message(message):
                                              if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption)
                                                                            for item in media_list])
                         bot.send_message(admin.tgid,
-                                         f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}',
+                                         f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}\nТекст: {post.data}\nАнонимно: {"Да" if post.anonym else "Нет"}',
                                          reply_markup=markup,
                                          parse_mode='HTML',
                                          disable_web_page_preview=True)
