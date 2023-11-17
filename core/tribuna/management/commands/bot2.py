@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import time
@@ -6,7 +7,7 @@ from django.core.management import BaseCommand
 from django.utils import timezone
 from telebot import TeleBot, types
 from requests.exceptions import Timeout
-from telebot.types import CallbackQuery, InputMediaPhoto
+from telebot.types import CallbackQuery, InputMediaPhoto, InputMediaVideo
 
 from . import config
 from ...models import Accounts, UserMessage
@@ -49,7 +50,8 @@ def get_user_password_input(message):
     read_pass_from_user = message.text
     p = Accounts.objects.get(tgid=message.chat.id)
     try:
-        club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/326070831.json', headers=headers, timeout=3)
+        club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/326070831.json', headers=headers,
+                                    timeout=3)
         if club_profile.status_code == 200:
             profile_json = club_profile.json()
             club_get_bio = profile_json['user']['bio']
@@ -197,25 +199,6 @@ def new_post(message):
         print(e)
 
 
-@bot.message_handler(content_types=['video'])
-def video_message(message):
-    p = Accounts.objects.get(tgid=message.chat.id)
-    if p.get_content:
-        caption = message.caption if message.caption else ""
-        p.get_content = False
-        p.save()
-        UserMessage(
-            user=p,
-            data=caption,
-            file_ids=message.video.file_id,
-            message_id=message.id,
-            type='video',
-        ).save()
-        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message, message.id))
-        last_user_message[message.chat.id] = visibility_buttons.message_id
-
-
 @bot.message_handler(content_types=['photo'])
 def photo_message(message):
     try:
@@ -231,7 +214,8 @@ def photo_message(message):
                 'message_id': message.message_id,
                 'file_id': message.photo[-1].file_id
             })
-            # If the user has sent 10 photos, disable further photo sending
+            print(user_photos[message.chat.id]['photos'])
+            # If the user has sent 10 photos, disable further photo zsending
             caption = message.caption if message.caption else ""
             if user_photos[message.chat.id]['count'] >= 10:
                 p.get_content = False
@@ -239,15 +223,16 @@ def photo_message(message):
                 bot.send_message(message.chat.id,
                                  "You have reached the maximum limit of 10 photos. Photo sending is now disabled.")
                 # Create a UserMessage record with the available photos
-                create_user_message_record(p, user_photos[message.chat.id]['photos'], caption)
+                create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption)
                 user_photos.pop(message.chat.id)
     except Exception as e:
         print(f'photo_message: {e}')
 
 
-def create_user_message_record(p, photos, caption):
+# create_user_message_record
+def create_photo_message_record(p, photos, caption):
     first_photo_info = photos[0]
-
+    print(first_photo_info)
     UserMessage(
         user=p,
         message_id=first_photo_info['message_id'],
@@ -255,18 +240,67 @@ def create_user_message_record(p, photos, caption):
         type='photo',
         data=(caption if caption else '')
     ).save()
-#     m = UserMessage.objects.get(message_id=first_photo_info['message_id'])
-#     user_photos.pop(p.tgid, None)
-#     user_id = m.user.tgid
-#     message_id = m.message_id
-#     send_media_group_test_func(user_id, message_id)
-#
-#
-# def send_media_group_test_func(user_id, message_id):
-#     m = UserMessage.objects.get(message_id=message_id)
-#     media_list = str(m.file_ids)
-#     media_list = [item.strip() for item in media_list.split(",")]
-#     bot.send_media_group(user_id, [InputMediaPhoto(media=item) for item in media_list])
+
+
+# @bot.message_handler(content_types=['video'])
+# def video_message(message):
+#     p = Accounts.objects.get(tgid=message.chat.id)
+#     if p.get_content:
+#         caption = message.caption if message.caption else ""
+#         p.get_content = False
+#         p.save()
+#         UserMessage(
+#             user=p,
+#             data=caption,
+#             file_ids=message.video.file_id,
+#             message_id=message.id,
+#             type='video',
+#         ).save()
+#         visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+#                                               reply_markup=send_posts_markup(message, message.id))
+#         last_user_message[message.chat.id] = visibility_buttons.message_id
+
+
+@bot.message_handler(content_types=['video'])
+def video_message(message):
+    try:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        if p.has_access and p.get_content:
+            # Check if the user_photos dictionary has an entry for the user
+            if message.chat.id not in user_videos:
+                user_videos[message.chat.id] = {'count': 0, 'videos': []}
+            # Increment the count of photos sent by the user
+            user_videos[message.chat.id]['count'] += 1
+            # Store the message_id and file_id of the photo
+            user_videos[message.chat.id]['videos'].append({
+                'message_id': message.message_id,
+                'file_id': message.video.file_id
+            })
+            # If the user has sent 10 photos, disable further photo zsending
+            caption = message.caption if message.caption else ""
+            if user_videos[message.chat.id]['count'] >= 10:
+                p.get_content = False
+                p.save()
+                bot.send_message(message.chat.id,
+                                 "You have reached the maximum limit of 10 videos. Video sending is now disabled.")
+                # Create a UserMessage record with the available photos
+                create_video_message_record(p, user_videos[message.chat.id]['videos'], caption)
+                user_videos.pop(message.chat.id)
+    except Exception as e:
+        print(f'video_message: {e}')
+
+
+# create_user_message_record
+def create_video_message_record(p, videos, caption):
+    first_video_info = videos[0]
+    print(first_video_info)
+    UserMessage(
+        user=p,
+        message_id=first_video_info['message_id'],
+        file_ids=','.join(video['file_id'] for video in videos),
+        type='video',
+        data=(caption if caption else '')
+    ).save()
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -300,19 +334,17 @@ def callback_query(call):
         if m.type == 'text':
             for admin in bot_admins:
                 bot.send_message(admin.tgid,
-                                 f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid }\nТекст: {m.data}', reply_markup=markup)
-        elif m.type == 'photo':
+                                 f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}',
+                                 reply_markup=markup)
+        elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}'
             for admin in bot_admins:
-                bot.send_media_group(admin.tgid, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+                bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption) for item in
+                                                  media_list] if m.type == 'video' else [
+                    InputMediaPhoto(media=item, caption=caption) for item in media_list])
                 bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
-        elif m.type == 'video':
-            for admin in bot_admins:
-                bot.send_video(admin.tgid, m.file_ids,
-                               caption=f'Отправитель: {m.user.tglogin if m.user.tglogin else m.user.tgname if m.user.tgname else m.user.tgid}\nТекст: {m.data}\nАнонимность: {m.anonym}',
-                               reply_markup=markup)
         bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
@@ -326,14 +358,13 @@ def callback_query(call):
             if m.type == 'text':
                 post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
                 bot.send_message(test_channel_id, post_text)
-            elif m.type == 'photo':
+            elif m.type == 'photo' or 'video':
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
                 caption = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption) for item in media_list])
-            elif m.type == 'video':
-                post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_video(test_channel_id, m.file_ids, caption=post_text)
+                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption) for item in
+                                                       media_list] if m.type == 'photo' else [
+                    InputMediaVideo(media=item, caption=caption) for item in media_list])
             user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
             m.sent = True
             m.status = 'accept'
@@ -352,10 +383,12 @@ def callback_query(call):
 
 # Define a dictionary to store user photo information
 user_photos = {}
+user_videos = {}
 
 
 @bot.message_handler(content_types=['text'])
 def text_message(message):
+    #   Показываем посты на ПреМодерации админам бота
     p = Accounts.objects.get(tgid=message.chat.id)
     if message.chat.id in bot_admins:
         if message.text == config.moderation_list:
@@ -377,29 +410,26 @@ def text_message(message):
                 markup.add(accept_post, cancel_post, block_user)
                 if post.type == 'text':
                     for admin in bot_admins:
-                        bot.send_message(admin.tgid, f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid }\n{post.data}\nАнонимность: {post.anonym}',
+                        bot.send_message(admin.tgid,
+                                         f'Отправитель: {"@" + post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\n{post.data}\nАнонимность: {post.anonym}',
                                          reply_markup=markup)
-                elif post.type == 'photo':
-
+                elif post.type == 'photo' or 'video':
                     media_list = str(post.file_ids)
                     media_list = [item.strip() for item in media_list.split(",")]
                     caption = f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}'
                     for admin in bot_admins:
                         bot.send_media_group(admin.tgid,
-                                             [InputMediaPhoto(media=item, caption=caption) for item in media_list])
+                                             [InputMediaPhoto(media=item, caption=caption) for item in media_list]
+                                             if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption)
+                                                                           for item in media_list])
                         bot.send_message(admin.tgid, 'Показываю кнопки', reply_markup=markup)
-                elif post.type == 'video':
-                    for admin in bot_admins:
-                        bot.send_video(admin.tgid, post.file_ids,
-                                       caption=f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}',
-                                       reply_markup=markup)
     remove_reply_markup = types.ReplyKeyboardRemove()
+    #   Если нажата кнопка "Отправить пост на модерацию"
     if message.text == config.send_to_moderate:
         if p.get_content:
-            p.get_content = False
-            p.save()
+            #   Если отправляется фото или стопка фото
             if message.chat.id in user_photos:
-                create_user_message_record(p, user_photos[message.chat.id]['photos'], caption=None)
+                create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption=None)
                 photos = user_photos[message.chat.id]['photos']
                 first_message_id = photos[0]
                 first_msg_id = first_message_id['message_id']
@@ -407,8 +437,22 @@ def text_message(message):
                                  "Пост будет отправлен на модерацию!",
                                  reply_markup=send_posts_markup(message, first_msg_id))
                 bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                print(user_photos)
                 user_photos.pop(message.chat.id)
+                p.get_content = False
+                p.save()
+            elif message.chat.id in user_videos:
+                create_video_message_record(p, user_videos[message.chat.id]['videos'], caption=None)
+                videos = user_videos[message.chat.id]['videos']
+                print(videos)
+                first_message_id = videos[0]
+                first_msg_id = first_message_id['message_id']
+                bot.send_message(message.chat.id,
+                                 "Пост будет отправлен на модерацию!",
+                                 reply_markup=send_posts_markup(message, first_msg_id))
+                bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+                user_videos.pop(message.chat.id)
+                p.get_content = False
+                p.save()
         else:
             print('Photo sending is already disabled.')
     if message.text != config.send_to_moderate and p.get_content:
