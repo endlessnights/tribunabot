@@ -322,9 +322,9 @@ def callback_query(call):
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'{m.data}'
             for admin in bot_admins:
-                bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption) for item in
-                                                  media_list] if m.type == 'video' else [
-                    InputMediaPhoto(media=item, caption=caption, parse_mode='HTML') for item in media_list])
+                bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption if index == 0 else None) for index, item in
+                                                  enumerate(media_list)] if m.type == 'video' else [
+                    InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for index, item in enumerate(media_list)])
                 bot.send_message(admin.tgid,
                                  f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                  reply_markup=markup,
@@ -348,9 +348,9 @@ def callback_query(call):
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
                 caption = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption) for item in
-                                                       media_list] if m.type == 'photo' else [
-                    InputMediaVideo(media=item, caption=caption) for item in media_list])
+                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption if index == 0 else None) for index, item in
+                                                       enumerate(media_list)] if m.type == 'photo' else [
+                    InputMediaVideo(media=item, caption=caption if index == 0 else None) for index, item in enumerate(media_list)])
             user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
             m.sent = True
             m.status = 'accept'
@@ -405,9 +405,9 @@ def text_message(message):
                     caption = f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}'
                     for admin in bot_admins:
                         bot.send_media_group(admin.tgid,
-                                             [InputMediaPhoto(media=item, caption=caption) for item in media_list]
-                                             if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption)
-                                                                           for item in media_list])
+                                             [InputMediaPhoto(media=item, caption=caption if index == 0 else None) for index, item in enumerate(media_list)]
+                                             if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption if index == 0 else None)
+                                                                           for index, item in enumerate(media_list)])
                         bot.send_message(admin.tgid,
                                          f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}\nТекст: {post.data}\nАнонимно: {"Да" if post.anonym else "Нет"}',
                                          reply_markup=markup,
@@ -435,7 +435,6 @@ def text_message(message):
                 p.get_content = False
                 p.save()
             elif message.chat.id in user_videos:
-                print(user_videos)
                 videos = user_videos[message.chat.id]['videos']
                 non_empty_caption = find_non_empty_caption(videos)
                 create_video_message_record(p, user_videos[message.chat.id]['videos'],
