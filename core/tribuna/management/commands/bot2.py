@@ -204,6 +204,7 @@ def photo_message(message):
     try:
         p = Accounts.objects.get(tgid=message.chat.id)
         if p.has_access and p.get_content:
+            caption = message.caption if message.caption else ""
             # Check if the user_photos dictionary has an entry for the user
             if message.chat.id not in user_photos:
                 user_photos[message.chat.id] = {'count': 0, 'photos': []}
@@ -212,10 +213,10 @@ def photo_message(message):
             # Store the message_id and file_id of the photo
             user_photos[message.chat.id]['photos'].append({
                 'message_id': message.message_id,
-                'file_id': message.photo[-1].file_id
+                'file_id': message.photo[-1].file_id,
+                'caption': caption
             })
             # If the user has sent 10 photos, disable further photo zsending
-            caption = message.caption if message.caption else ""
             if user_photos[message.chat.id]['count'] >= 10:
                 p.get_content = False
                 p.save()
@@ -240,30 +241,12 @@ def create_photo_message_record(p, photos, caption):
     ).save()
 
 
-# @bot.message_handler(content_types=['video'])
-# def video_message(message):
-#     p = Accounts.objects.get(tgid=message.chat.id)
-#     if p.get_content:
-#         caption = message.caption if message.caption else ""
-#         p.get_content = False
-#         p.save()
-#         UserMessage(
-#             user=p,
-#             data=caption,
-#             file_ids=message.video.file_id,
-#             message_id=message.id,
-#             type='video',
-#         ).save()
-#         visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-#                                               reply_markup=send_posts_markup(message, message.id))
-#         last_user_message[message.chat.id] = visibility_buttons.message_id
-
-
 @bot.message_handler(content_types=['video'])
 def video_message(message):
     try:
         p = Accounts.objects.get(tgid=message.chat.id)
         if p.has_access and p.get_content:
+            caption = message.caption if message.caption else ""
             # Check if the user_photos dictionary has an entry for the user
             if message.chat.id not in user_videos:
                 user_videos[message.chat.id] = {'count': 0, 'videos': []}
@@ -272,10 +255,10 @@ def video_message(message):
             # Store the message_id and file_id of the photo
             user_videos[message.chat.id]['videos'].append({
                 'message_id': message.message_id,
-                'file_id': message.video.file_id
+                'file_id': message.video.file_id,
+                'caption': caption
             })
             # If the user has sent 10 photos, disable further photo zsending
-            caption = message.caption if message.caption else ""
             if user_videos[message.chat.id]['count'] >= 10:
                 p.get_content = False
                 p.save()
@@ -337,7 +320,7 @@ def callback_query(call):
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
-            caption = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+            caption = f'{m.data}'
             for admin in bot_admins:
                 bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption) for item in
                                                   media_list] if m.type == 'video' else [
@@ -436,8 +419,10 @@ def text_message(message):
         if p.get_content:
             #   Если отправляется фото, видео или стопка фото, видео
             if message.chat.id in user_photos:
-                create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption=None)
                 photos = user_photos[message.chat.id]['photos']
+                non_empty_caption = find_non_empty_caption(photos)
+                create_photo_message_record(p, user_photos[message.chat.id]['photos'],
+                                            caption=non_empty_caption if non_empty_caption != None else None)
                 first_message_id = photos[0]
                 first_msg_id = first_message_id['message_id']
                 bot.send_message(message.chat.id,
@@ -450,8 +435,11 @@ def text_message(message):
                 p.get_content = False
                 p.save()
             elif message.chat.id in user_videos:
-                create_video_message_record(p, user_videos[message.chat.id]['videos'], caption=None)
+                print(user_videos)
                 videos = user_videos[message.chat.id]['videos']
+                non_empty_caption = find_non_empty_caption(videos)
+                create_video_message_record(p, user_videos[message.chat.id]['videos'],
+                                            caption=non_empty_caption if non_empty_caption != None else None)
                 first_message_id = videos[0]
                 first_msg_id = first_message_id['message_id']
                 bot.send_message(message.chat.id,
@@ -478,6 +466,12 @@ def text_message(message):
         bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
         last_user_message[message.chat.id] = visibility_buttons.message_id
 
+
+def find_non_empty_caption(photos):
+    for photo_info in photos:
+        if photo_info['caption']:
+            return photo_info['caption']
+    return None
 
 class Command(BaseCommand):
     help = 'Implemented to Django application telegram bot setup command'
