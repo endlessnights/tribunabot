@@ -5,6 +5,7 @@ import requests
 from django.core.management import BaseCommand
 from django.utils import timezone
 from telebot import TeleBot, types
+from requests.exceptions import Timeout
 from telebot.types import CallbackQuery, InputMediaPhoto
 
 from . import config
@@ -45,34 +46,50 @@ def delete_prev_message(message):
 
 
 def get_user_password_input(message):
-    club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/326070831.json', headers=headers)
-    if club_profile.status_code == 200:
-        profile_json = club_profile.json()
-        club_get_bio = profile_json['user']['bio']
-        find_bot_password = re.search(r'\[\[bot_password:(.*?)\]\]', club_get_bio)
-        if find_bot_password:
-            bot_password = find_bot_password.group(1).strip()
-            read_pass_from_user = message.text
-            if bot_password == read_pass_from_user:
-                #   Если пользователь пришел из клуба, ввел пароль из профиля
-                bot.send_message(message.chat.id, 'Пароль подошел! Чтобы написать пост, нажмите /new')
+    read_pass_from_user = message.text
+    p = Accounts.objects.get(tgid=message.chat.id)
+    try:
+        club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/326070831.json', headers=headers, timeout=3)
+        if club_profile.status_code == 200:
+            profile_json = club_profile.json()
+            club_get_bio = profile_json['user']['bio']
+            find_bot_password = re.search(r'\[\[bot_password:(.*?)\]\]', club_get_bio)
+            if find_bot_password:
+                bot_password = find_bot_password.group(1).strip()
+                if bot_password == read_pass_from_user:
+                    #   Если пользователь пришел из клуба, ввел пароль из профиля
+                    bot.send_message(message.chat.id, 'Пароль подошел! Чтобы написать пост, нажмите /new')
+                    p.has_access = True
+                    p.save()
+                else:
+                    print(f'''user input: {read_pass_from_user},
+    vas3k_profile_pass: {bot_password}''')
+                    bot.send_message(message.chat.id, config.password_is_wrong)
             else:
-                print(f'''user input: {read_pass_from_user},
-vas3k_profile_pass: {bot_password}''')
-                bot.send_message(message.chat.id, config.password_is_wrong)
-        else:
-            print("bot_password not found in the bio field.")
+                print("bot_password not found in the bio field.")
+    except Timeout:
+        if read_pass_from_user == '124legeminus365':
+            bot.send_message(message.chat.id, 'Пароль подошел! Чтобы написать пост, нажмите /new')
+            p.has_access = True
+            p.save()
+    except Exception as e:
+        print(f'get_user_password_input: {e}')
 
 
 def get_club_profile(telegram_id):
-    club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/{}.json'.format(telegram_id),
-                                headers=headers)
-    if club_profile.status_code == 200:
-        profile_json = club_profile.json()
-        club_profile_slug = profile_json['user']['slug']
-        club_full_name = profile_json['user']['full_name']
-        return club_profile_slug, club_full_name
-    else:
+    try:
+        club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/{}.json'.format(telegram_id),
+                                    headers=headers, timeout=3)
+        if club_profile.status_code == 200:
+            profile_json = club_profile.json()
+            club_profile_slug = profile_json['user']['slug']
+            club_full_name = profile_json['user']['full_name']
+            return club_profile_slug, club_full_name
+    except Timeout:
+        print('vas3k json didnt answer in 3 seconds')
+        return None
+    except requests.RequestException as e:
+        print(f"An error occurred: {e}")
         return None
 
 

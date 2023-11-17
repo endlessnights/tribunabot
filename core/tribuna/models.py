@@ -37,7 +37,6 @@ class UserMessage(models.Model):
     type = models.CharField(max_length=6, choices=type_choices, default='text')
     data = models.TextField(max_length=4000, blank=True, null=True)
     file_ids = models.CharField(max_length=1000, blank=True, null=True)
-    media_group = models.BooleanField(default=False)
     anonym = models.BooleanField(default=False)
     sent = models.BooleanField(default=False)
     status_choices = [
