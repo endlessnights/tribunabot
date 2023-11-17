@@ -322,15 +322,18 @@ def callback_query(call):
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'{m.data}'
             for admin in bot_admins:
-                bot.send_media_group(admin.tgid, [InputMediaVideo(media=item, caption=caption if index == 0 else None) for index, item in
-                                                  enumerate(media_list)] if m.type == 'video' else [
-                    InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for index, item in enumerate(media_list)])
+                bot.send_media_group(admin.tgid,
+                                     [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                      index, item in
+                                      enumerate(media_list)] if m.type == 'video' else [
+                                         InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                         parse_mode='HTML') for index, item in enumerate(media_list)])
                 bot.send_message(admin.tgid,
                                  f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                  reply_markup=markup,
                                  parse_mode='HTML',
                                  disable_web_page_preview=True)
-        bot.send_message(call.message.chat.id, 'Сообщение отправлено на модерацию!')
+        bot.send_message(call.message.chat.id, config.post_sent, parse_mode='HTML')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
     if str(call.data).startswith('post_accept_action'):
@@ -341,17 +344,23 @@ def callback_query(call):
         m = UserMessage.objects.get(message_id=message_id)
         if action == 'True':
             if m.type == 'text':
-                # post_text = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                post_text = (config.anonym_text_post.format(m.data) if anonym else config.public_text_post.format(m.user.clubname, m.user.clublogin, m.data))
+                post_text = (
+                    config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
+                        m.user.clubname, m.user.clublogin, m.user.clublogin, m.data))
                 bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             elif m.type == 'photo' or 'video':
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
-                caption = f'Новый пост в Вастрик.Трибуна!\n{m.data}' if anonym == 'True' else f'Новый пост в Вастрик.Трибуна!\nАвтор: {m.user.tgid}\n{m.data}'
-                bot.send_media_group(test_channel_id, [InputMediaPhoto(media=item, caption=caption if index == 0 else None) for index, item in
-                                                       enumerate(media_list)] if m.type == 'photo' else [
-                    InputMediaVideo(media=item, caption=caption if index == 0 else None) for index, item in enumerate(media_list)])
-            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение отправлено в Вастрик.Трибуна')
+                caption = (
+                    config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
+                        m.user.clubname, m.user.clublogin, m.user.clublogin, m.data))
+                bot.send_media_group(test_channel_id, [
+                    InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
+                    index, item in
+                    enumerate(media_list)] if m.type == 'photo' else [
+                    InputMediaVideo(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
+                    index, item in enumerate(media_list)])
+            user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML')
             m.sent = True
             m.status = 'accept'
             m.save()
@@ -370,6 +379,14 @@ def callback_query(call):
 # Define a dictionary to store user photo information
 user_photos = {}
 user_videos = {}
+
+
+@bot.message_handler(content_types=['document', 'audio', 'sticker', 'voice', 'video_note', 'contact', 'location'])
+def forbidden_content(message):
+    bot.send_message(message.chat.id, config.forbidden_types)
+    p = Accounts.objects.get(tgid=message.chat.id)
+    p.get_content = False
+    p.save()
 
 
 @bot.message_handler(content_types=['text'])
@@ -405,9 +422,11 @@ def text_message(message):
                     caption = f'Отправитель: {post.user.tglogin if post.user.tglogin else post.user.tgname if post.user.tgname else post.user.tgid}\nТекст: {post.data}\nАнонимность: {post.anonym}'
                     for admin in bot_admins:
                         bot.send_media_group(admin.tgid,
-                                             [InputMediaPhoto(media=item, caption=caption if index == 0 else None) for index, item in enumerate(media_list)]
-                                             if post.type == 'photo' else [InputMediaVideo(media=item, caption=caption if index == 0 else None)
-                                                                           for index, item in enumerate(media_list)])
+                                             [InputMediaPhoto(media=item, caption=caption if index == 0 else None) for
+                                              index, item in enumerate(media_list)]
+                                             if post.type == 'photo' else [
+                                                 InputMediaVideo(media=item, caption=caption if index == 0 else None)
+                                                 for index, item in enumerate(media_list)])
                         bot.send_message(admin.tgid,
                                          f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}\nТекст: {post.data}\nАнонимно: {"Да" if post.anonym else "Нет"}',
                                          reply_markup=markup,
@@ -417,37 +436,44 @@ def text_message(message):
     #   Если нажата кнопка "Запостить"
     if message.text == config.send_to_moderate:
         if p.get_content:
-            #   Если отправляется фото, видео или стопка фото, видео
+            #   Если отправляется фото, стопка фото
             if message.chat.id in user_photos:
                 photos = user_photos[message.chat.id]['photos']
                 non_empty_caption = find_non_empty_caption(photos)
-                create_photo_message_record(p, user_photos[message.chat.id]['photos'],
-                                            caption=non_empty_caption if non_empty_caption != None else None)
-                first_message_id = photos[0]
-                first_msg_id = first_message_id['message_id']
-                bot.send_message(message.chat.id,
-                                 config.post_sent,
-                                 reply_markup=send_posts_markup(message, first_msg_id),
-                                 parse_mode='HTML',
-                                 disable_web_page_preview=True)
-                bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                user_photos.pop(message.chat.id)
-                p.get_content = False
-                p.save()
+                if non_empty_caption == None:
+                    bot.send_message(message.chat.id, config.forbidden_types)
+                else:
+                    create_photo_message_record(p, user_photos[message.chat.id]['photos'],
+                                                caption=non_empty_caption if non_empty_caption != None else None)
+                    first_message_id = photos[0]
+                    first_msg_id = first_message_id['message_id']
+                    bot.send_message(message.chat.id,
+                                     config.post_sent,
+                                     reply_markup=send_posts_markup(message, first_msg_id),
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
+                    bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+                    user_photos.pop(message.chat.id)
+                    p.get_content = False
+                    p.save()
+            #   Если отправляется видео, стопка видео
             elif message.chat.id in user_videos:
                 videos = user_videos[message.chat.id]['videos']
                 non_empty_caption = find_non_empty_caption(videos)
-                create_video_message_record(p, user_videos[message.chat.id]['videos'],
-                                            caption=non_empty_caption if non_empty_caption != None else None)
-                first_message_id = videos[0]
-                first_msg_id = first_message_id['message_id']
-                bot.send_message(message.chat.id,
-                                 config.post_sent,
-                                 reply_markup=send_posts_markup(message, first_msg_id))
-                bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                user_videos.pop(message.chat.id)
-                p.get_content = False
-                p.save()
+                if non_empty_caption == None:
+                    bot.send_message(message.chat.id, config.forbidden_types)
+                else:
+                    create_video_message_record(p, user_videos[message.chat.id]['videos'],
+                                                caption=non_empty_caption if non_empty_caption != None else None)
+                    first_message_id = videos[0]
+                    first_msg_id = first_message_id['message_id']
+                    bot.send_message(message.chat.id,
+                                     config.post_sent,
+                                     reply_markup=send_posts_markup(message, first_msg_id))
+                    bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+                    user_videos.pop(message.chat.id)
+                    p.get_content = False
+                    p.save()
         else:
             print('Photo sending is already disabled.')
     if message.text != config.send_to_moderate and p.get_content:
@@ -471,6 +497,7 @@ def find_non_empty_caption(photos):
         if photo_info['caption']:
             return photo_info['caption']
     return None
+
 
 class Command(BaseCommand):
     help = 'Implemented to Django application telegram bot setup command'
