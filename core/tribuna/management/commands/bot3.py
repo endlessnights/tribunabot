@@ -324,37 +324,50 @@ def callback_query(call):
             markup.add(accept_post, cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
             for admin in bot_admins:
+                post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
                 if bot_settings.pre_moder:
                     bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     post_text,
                                      reply_markup=markup,
                                      parse_mode='HTML')
                 else:
                     bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     post_text,
                                      parse_mode='HTML')
+                    bot.send_message(test_channel_id, post_text)
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'{m.data}'
             for admin in bot_admins:
-                bot.send_media_group(admin.tgid,
-                                     [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
-                                      index, item in
-                                      enumerate(media_list)] if m.type == 'video' else [
-                                         InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                         parse_mode='HTML') for index, item in enumerate(media_list)])
                 if bot_settings.pre_moder:
+                    bot.send_media_group(admin.tgid,
+                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                          index, item in
+                                          enumerate(media_list)] if m.type == 'video' else [
+                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                             parse_mode='HTML') for index, item in enumerate(media_list)])
+
                     bot.send_message(admin.tgid,
                                      f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                      reply_markup=markup,
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
                 else:
-                    bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
-                                     parse_mode='HTML',
-                                     disable_web_page_preview=True)
+                    bot.send_media_group(admin.tgid,
+                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                          index, item in
+                                          enumerate(media_list)] if m.type == 'video' else [
+                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                             parse_mode='HTML') for index, item in
+                                             enumerate(media_list)])
+                    bot.send_media_group(test_channel_id,
+                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                          index, item in
+                                          enumerate(media_list)] if m.type == 'video' else [
+                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                             parse_mode='HTML') for index, item in
+                                             enumerate(media_list)])
         bot.send_message(call.message.chat.id, config.post_sent, parse_mode='HTML')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
