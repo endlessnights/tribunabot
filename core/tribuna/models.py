@@ -20,6 +20,7 @@ class Accounts(models.Model):
     post_limit = models.PositiveIntegerField(verbose_name='Ограничения на постинг', blank=True, null=True, default=3)
     is_admin = models.BooleanField(verbose_name='Bot admin', default=False)
     has_access = models.BooleanField(verbose_name='Has access', default=False)
+    banned = models.BooleanField(default=False)
     get_content = models.BooleanField(default=False)
 
     def __str__(self):
@@ -36,6 +37,7 @@ class Accounts(models.Model):
 class UserMessage(models.Model):
     user = models.ForeignKey(Accounts, on_delete=models.CASCADE)
     message_id = models.CharField(max_length=30, blank=True, null=True)
+    channel_message_id = models.CharField(max_length=1000, blank=True, null=True)
     type_choices = [
         ('text', 'Text'),
         ('photo', 'Photo'),
@@ -61,18 +63,3 @@ class UserMessage(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.type}"
-
-
-class UserMessagePhoto(models.Model):
-    user_message = models.ForeignKey(UserMessage, related_name='photos', on_delete=models.CASCADE)
-    photo = models.ImageField(upload_to='user_photos/', blank=True)
-
-    def __str__(self):
-        return self.photo
-
-    def publish(self):
-        self.save()
-
-    class Meta:
-        verbose_name = 'Account'
-        verbose_name_plural = 'Accounts'

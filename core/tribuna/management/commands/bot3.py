@@ -136,37 +136,40 @@ def start_bot(message):
         print(f"An error occurred: {e}")
 
     p = Accounts.objects.get(tgid=message.chat.id)
-    if not p.has_access:
-        #   Делаем запрос в vas3k.club, получаем данные учетки из клуба, если бот привязан
-        club_profile_info = get_club_profile(message.chat.id)
-        if club_profile_info is not None:
-            p = Accounts.objects.get(tgid=message.chat.id)
-            p.has_access = True
-            club_profile_slug, club_full_name = club_profile_info
-            bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
-        #   Если бот не привязан, то запрашиваем пароль (указан в профиле клуба)
-        #   Или если сайт vas3k клуба возвращает не 200
-        else:
-            try:
+    if not p.banned:
+        if not p.has_access:
+            #   Делаем запрос в vas3k.club, получаем данные учетки из клуба, если бот привязан
+            club_profile_info = get_club_profile(message.chat.id)
+            if club_profile_info is not None:
                 p = Accounts.objects.get(tgid=message.chat.id)
-                if p.has_access:
-                    bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
-                else:
-                    get_user_password = bot.send_message(
-                        message.chat.id, f'{config.start_text_new.format(p.tgname)}\n{config.ask_password}',
-                        parse_mode='HTML')
-                    bot.register_next_step_handler(get_user_password, get_user_password_input)
-            except Exception as e:
-                print(f'{e}:111')
+                p.has_access = True
+                club_profile_slug, club_full_name = club_profile_info
+                bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
+            #   Если бот не привязан, то запрашиваем пароль (указан в профиле клуба)
+            #   Или если сайт vas3k клуба возвращает не 200
+            else:
+                try:
+                    p = Accounts.objects.get(tgid=message.chat.id)
+                    if p.has_access:
+                        bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
+                    else:
+                        get_user_password = bot.send_message(
+                            message.chat.id, f'{config.start_text_new.format(p.tgname)}\n{config.ask_password}',
+                            parse_mode='HTML')
+                        bot.register_next_step_handler(get_user_password, get_user_password_input)
+                except Exception as e:
+                    print(f'{e}:111')
 
-        if club_profile_info is not None:
-            p.clublogin = club_profile_slug
-            p.clubname = club_full_name
-            p.has_access = True
-            p.save()
+            if club_profile_info is not None:
+                p.clublogin = club_profile_slug
+                p.clubname = club_full_name
+                p.has_access = True
+                p.save()
+        else:
+            bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message),
+                             parse_mode='HTML')
     else:
-        bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message),
-                         parse_mode='HTML')
+        bot.send_message(message.chat.id, config.block_msg)
 
 
 def send_posts_markup(message, first_msg_id):
@@ -349,7 +352,10 @@ def callback_query(call):
                     bot.send_message(admin.tgid,
                                      post_text,
                                      parse_mode='HTML')
-                    bot.send_message(test_channel_id, post_text, parse_mode='HTML')
+                    post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
+                    #   Сохраняем Message_id поста в канале
+                    m.channel_message_id = post_to_channel.message_id
+                    m.save()
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
@@ -384,13 +390,15 @@ def callback_query(call):
                                      parse_mode='HTML',
                                      reply_markup=markup,
                                      disable_web_page_preview=True)
-                bot.send_media_group(test_channel_id,
+                post_to_channel = bot.send_media_group(test_channel_id,
                                      [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
                                       index, item in
                                       enumerate(media_list)] if m.type == 'video' else [
                                          InputMediaPhoto(media=item, caption=caption if index == 0 else None,
                                                          parse_mode='HTML') for index, item in
                                          enumerate(media_list)])
+                channel_message_ids = [message.message_id for message in post_to_channel]
+                m.channel_message_id = ','.join(map(str, channel_message_ids))
                 m.status = 'accept'
                 m.sent = True
                 m.save()
@@ -415,24 +423,70 @@ def callback_query(call):
                 caption = (
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
                         m.data, m.user.clubname, m.user.clublogin, m.user.clublogin))
-                bot.send_media_group(test_channel_id, [
+                post_to_channel = bot.send_media_group(test_channel_id, [
                     InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
                     index, item in
                     enumerate(media_list)] if m.type == 'photo' else [
                     InputMediaVideo(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
                     index, item in enumerate(media_list)])
+                channel_message_ids = [message.message_id for message in post_to_channel]
+                m.channel_message_id = ','.join(map(str, channel_message_ids))
+                m.save()
             user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML', disable_web_page_preview=True)
             m.sent = True
             m.status = 'accept'
             m.save()
         elif action == 'False':
-            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
-            m.status = 'failed'
-            m.sent = False
-            m.save()
+            if bot_settings.pre_moder:
+                user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
+                m.status = 'failed'
+                m.sent = False
+                m.save()
+            else:
+                if not m.status == 'failed':
+                    bot.delete_message(test_channel_id, m.channel_message_id)
+                    m.status = 'failed'
+                    m.sent = False
+                    m.save()
+                    markup = types.InlineKeyboardMarkup(row_width=1)
+                    block_user = types.InlineKeyboardButton(
+                        text='Заблокировать юзера',
+                        callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+                    )
+                    markup.add(block_user)
+                    bot.send_message(call.message.chat.id, 'Показываю кнопки', reply_markup=markup)
+                else:
+                    bot.answer_callback_query(call.id, 'Пост уже был удален другим админом')
+        elif action == 'Warn':
+            if bot_settings.pre_moder:
+                user_succ_reply = bot.send_message(m.user.tgid, config.warn_msg)
+                m.status = 'failed'
+                m.sent = False
+                m.save()
+            else:
+                if not m.status == 'failed':
+                    bot.delete_message(test_channel_id, m.channel_message_id)
+                    m.status = 'failed'
+                    m.sent = False
+                    m.save()
+                    markup = types.InlineKeyboardMarkup(row_width=1)
+                    block_user = types.InlineKeyboardButton(
+                        text='Заблокировать юзера',
+                        callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+                    )
+                    markup.add(block_user)
+                    bot.send_message(call.message.chat.id, 'Показываю кнопки', reply_markup=markup)
+                    user_succ_reply = bot.send_message(m.user.tgid, config.warn_msg)
+                else:
+                    bot.answer_callback_query(call.id, 'Пост уже был удален другим админом')
         elif action == 'Block':
-            print(m.user.tgname, 'ToBlock')
-            user_succ_reply = bot.send_message(m.user.tgid, 'Сообщение не прошло модерацию!')
+            if not m.user.banned:
+                user_succ_reply = bot.send_message(m.user.tgid, config.block_msg)
+                p = Accounts.objects.get(tgid=m.user.tgid)
+                p.banned = True
+                p.save()
+            else:
+                bot.answer_callback_query(call.id, 'Юзер уже был забанен другим админом')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
 
