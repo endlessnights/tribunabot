@@ -322,6 +322,21 @@ def callback_query(call):
                 callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
             )
             markup.add(accept_post, cancel_post, warn_delete_post, block_user)
+        else:
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            cancel_post = types.InlineKeyboardButton(
+                text='Удалить',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+            )
+            warn_delete_post = types.InlineKeyboardButton(
+                text='Удалить и предупредить',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
+            )
+            block_user = types.InlineKeyboardButton(
+                text='Заблокировать юзера',
+                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+            )
+            markup.add(cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
             for admin in bot_admins:
                 post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
@@ -334,41 +349,52 @@ def callback_query(call):
                     bot.send_message(admin.tgid,
                                      post_text,
                                      parse_mode='HTML')
-                    bot.send_message(test_channel_id, post_text)
+                    bot.send_message(test_channel_id, post_text, parse_mode='HTML')
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
             caption = f'{m.data}'
-            for admin in bot_admins:
-                if bot_settings.pre_moder:
+            #   Если включена премодерация
+            if bot_settings.pre_moder:
+                for admin in bot_admins:
+                        bot.send_media_group(admin.tgid,
+                                             [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                              index, item in
+                                              enumerate(media_list)] if m.type == 'video' else [
+                                                 InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                                 parse_mode='HTML') for index, item in enumerate(media_list)])
+
+                        bot.send_message(admin.tgid,
+                                         f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                         reply_markup=markup,
+                                         parse_mode='HTML',
+                                         disable_web_page_preview=True)
+            #   Если выключена премодерация
+            else:
+                for admin in bot_admins:
                     bot.send_media_group(admin.tgid,
                                          [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
                                           index, item in
                                           enumerate(media_list)] if m.type == 'video' else [
                                              InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                             parse_mode='HTML') for index, item in enumerate(media_list)])
-
+                                                             parse_mode='HTML') for index, item in
+                                             enumerate(media_list)])
                     bot.send_message(admin.tgid,
                                      f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
-                                     reply_markup=markup,
                                      parse_mode='HTML',
+                                     reply_markup=markup,
                                      disable_web_page_preview=True)
-                else:
-                    bot.send_media_group(admin.tgid,
-                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
-                                          index, item in
-                                          enumerate(media_list)] if m.type == 'video' else [
-                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                             parse_mode='HTML') for index, item in
-                                             enumerate(media_list)])
-                    bot.send_media_group(test_channel_id,
-                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
-                                          index, item in
-                                          enumerate(media_list)] if m.type == 'video' else [
-                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                             parse_mode='HTML') for index, item in
-                                             enumerate(media_list)])
-        bot.send_message(call.message.chat.id, config.post_sent, parse_mode='HTML')
+                bot.send_media_group(test_channel_id,
+                                     [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                      index, item in
+                                      enumerate(media_list)] if m.type == 'video' else [
+                                         InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                         parse_mode='HTML') for index, item in
+                                         enumerate(media_list)])
+                m.status = 'accept'
+                m.sent = True
+                m.save()
+        bot.send_message(call.message.chat.id, config.post_sent, parse_mode='HTML', disable_web_page_preview=True)
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
     if str(call.data).startswith('post_accept_action'):
@@ -395,7 +421,7 @@ def callback_query(call):
                     enumerate(media_list)] if m.type == 'photo' else [
                     InputMediaVideo(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
                     index, item in enumerate(media_list)])
-            user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML')
+            user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML', disable_web_page_preview=True)
             m.sent = True
             m.status = 'accept'
             m.save()
@@ -523,10 +549,29 @@ def text_message(message):
                                                 caption=non_empty_caption if non_empty_caption != None else None)
                     first_message_id = videos[0]
                     first_msg_id = first_message_id['message_id']
-                    bot.send_message(message.chat.id,
-                                     config.post_sent,
-                                     reply_markup=send_posts_markup(message, first_msg_id))
-                    bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+                    if bot_settings.anonym_func:
+                        bot.send_message(message.chat.id,
+                                         config.post_sent,
+                                         reply_markup=send_posts_markup(message, first_msg_id),
+                                         disable_web_page_preview=True,
+                                         parse_mode='HTML')
+                        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+                    else:
+                        m = UserMessage.objects.get(message_id=first_msg_id)
+                        media_list = str(m.file_ids)
+                        media_list = [item.strip() for item in media_list.split(",")]
+                        caption = f'{m.data}'
+                        markup = types.InlineKeyboardMarkup(row_width=1)
+                        send_post = types.InlineKeyboardButton(
+                            text='Запостить',
+                            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+                        )
+                        markup.add(send_post)
+                        bot.send_media_group(message.chat.id,
+                                             [InputMediaVideo(media=item, caption=caption if index == 0 else None,
+                                                              parse_mode='HTML')
+                                              for index, item in enumerate(media_list)])
+                        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
                     user_videos.pop(message.chat.id)
                     p.get_content = False
                     p.save()
@@ -542,10 +587,19 @@ def text_message(message):
             type='text',
         ).save()
         m = UserMessage.objects.get(message_id=message.id)
-        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message, message.id))
-        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-        last_user_message[message.chat.id] = visibility_buttons.message_id
+        if bot_settings.anonym_func:
+            visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                                  reply_markup=send_posts_markup(message, message.id))
+            bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+            last_user_message[message.chat.id] = visibility_buttons.message_id
+        else:
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            send_post = types.InlineKeyboardButton(
+                text='Запостить',
+                callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+            )
+            markup.add(send_post)
+            bot.send_message(message.chat.id, f'Это превью поста:\n\n{m.data}', reply_markup=markup)
 
 
 def find_non_empty_caption(photos):
