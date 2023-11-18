@@ -522,6 +522,24 @@ def forbidden_content(message):
     p.save()
 
 
+@bot.message_handler(content_types=['poll'])
+def poll_message(message):
+    p = Accounts.objects.get(tgid=message.chat.id)
+    print(message.poll)
+    if p.get_content:
+        UserMessage(
+            user=p,
+            type='poll',
+            question=message.poll.question,
+            options=json.dumps([option.text for option in message.poll.options]),
+            allows_multiple_answers_poll=message.poll.allows_multiple_answers,
+            is_anonymous_poll=message.poll.is_anonymous,
+            poll_id=message.poll.id
+        ).save()
+        m = UserMessage.objects.get(poll_id=message.poll.id)
+        # bot.send_poll(message.chat.id, m.question, m.options, )
+
+
 @bot.message_handler(content_types=['text'])
 def text_message(message):
     #   Показываем посты на ПреМодерации админам бота

@@ -60,6 +60,11 @@ class UserMessage(models.Model):
         choices=status_choices,
         default='wait',
     )
+    question = models.TextField(max_length=4000, blank=True, null=True)
+    options = models.TextField(max_length=4000, blank=True, null=True)
+    allows_multiple_answers_poll = models.CharField(max_length=2000, blank=True, null=True)
+    is_anonymous_poll = models.CharField(max_length=2000, blank=True, null=True)
+    poll_id = models.CharField(max_length=2000, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user} - {self.type}"
