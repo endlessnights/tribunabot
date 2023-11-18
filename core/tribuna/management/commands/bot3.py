@@ -136,6 +136,8 @@ def start_bot(message):
         print(f"An error occurred: {e}")
 
     p = Accounts.objects.get(tgid=message.chat.id)
+    p.get_content = False
+    p.save()
     if not p.banned:
         if not p.has_access:
             #   Делаем запрос в vas3k.club, получаем данные учетки из клуба, если бот привязан
@@ -202,6 +204,17 @@ def new_post(message):
     except Exception as e:
         bot.send_message(message.chat.id, 'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
         print(e)
+
+
+@bot.message_handler(commands=['publish'])
+def publish_it_action_btn(message):
+    p = Accounts.objects.get(tgid=message.chat.id)
+    if message.chat.id in user_photos:
+        publish_photo_func(message, p)
+    elif message.chat.id in user_videos:
+        publish_video_func(message, p)
+    elif p.get_content and message.text != '/publish':
+        publish_text_func(message, p)
 
 
 @bot.message_handler(content_types=['photo'])
@@ -358,18 +371,19 @@ def callback_query(call):
             #   Если включена премодерация
             if bot_settings.pre_moder:
                 for admin in bot_admins:
-                        bot.send_media_group(admin.tgid,
-                                             [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
-                                              index, item in
-                                              enumerate(media_list)] if m.type == 'video' else [
-                                                 InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                                 parse_mode='HTML') for index, item in enumerate(media_list)])
+                    bot.send_media_group(admin.tgid,
+                                         [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
+                                          index, item in
+                                          enumerate(media_list)] if m.type == 'video' else [
+                                             InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                             parse_mode='HTML') for index, item in
+                                             enumerate(media_list)])
 
-                        bot.send_message(admin.tgid,
-                                         f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
-                                         reply_markup=markup,
-                                         parse_mode='HTML',
-                                         disable_web_page_preview=True)
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     reply_markup=markup,
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
             #   Если выключена премодерация
             else:
                 for admin in bot_admins:
@@ -386,12 +400,14 @@ def callback_query(call):
                                      reply_markup=markup,
                                      disable_web_page_preview=True)
                 post_to_channel = bot.send_media_group(test_channel_id,
-                                     [InputMediaVideo(media=item, caption=caption if index == 0 else None) for
-                                      index, item in
-                                      enumerate(media_list)] if m.type == 'video' else [
-                                         InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                         parse_mode='HTML') for index, item in
-                                         enumerate(media_list)])
+                                                       [InputMediaVideo(media=item,
+                                                                        caption=caption if index == 0 else None) for
+                                                        index, item in
+                                                        enumerate(media_list)] if m.type == 'video' else [
+                                                           InputMediaPhoto(media=item,
+                                                                           caption=caption if index == 0 else None,
+                                                                           parse_mode='HTML') for index, item in
+                                                           enumerate(media_list)])
                 channel_message_ids = [message.message_id for message in post_to_channel]
                 m.channel_message_id = ','.join(map(str, channel_message_ids))
                 m.status = 'accept'
@@ -427,7 +443,8 @@ def callback_query(call):
                 channel_message_ids = [message.message_id for message in post_to_channel]
                 m.channel_message_id = ','.join(map(str, channel_message_ids))
                 m.save()
-            user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML', disable_web_page_preview=True)
+            user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML',
+                                               disable_web_page_preview=True)
             m.sent = True
             m.status = 'accept'
             m.save()
@@ -548,113 +565,146 @@ def text_message(message):
                                          reply_markup=markup,
                                          parse_mode='HTML',
                                          disable_web_page_preview=True)
+    if message.text == config.send_to_moderate:
+        if message.chat.id in user_photos:
+            publish_photo_func(message, p)
+        elif message.chat.id in user_videos:
+            publish_video_func(message, p)
+    if message.text != config.send_to_moderate and p.get_content:
+        publish_text_func(message, p)
+
+
+def publish_photo_func(message, p):
     remove_reply_markup = types.ReplyKeyboardRemove()
     #   Если нажата кнопка "Запостить"
-    if message.text == config.send_to_moderate:
-        if p.get_content:
-            #   Если отправляется фото, стопка фото
-            if message.chat.id in user_photos:
-                photos = user_photos[message.chat.id]['photos']
-                non_empty_caption = find_non_empty_caption(photos)
-                if non_empty_caption == None:
-                    bot.send_message(message.chat.id, config.forbidden_types)
-                    p.get_content = False
-                    p.save()
+    if p.get_content:
+        #   Если отправляется фото, стопка фото
+        if message.chat.id in user_photos:
+            photos = user_photos[message.chat.id]['photos']
+            non_empty_caption = find_non_empty_caption(photos)
+            #   Если нет текста у фото
+            if non_empty_caption is None:
+                bot.send_message(message.chat.id, config.no_caption)
+                p.get_content = False
+                p.save()
+                pass
+            else:
+                create_photo_message_record(p, user_photos[message.chat.id]['photos'],
+                                            caption=non_empty_caption if non_empty_caption is not None else None)
+                first_message_id = photos[0]
+                first_msg_id = first_message_id['message_id']
+                if bot_settings.anonym_func:
+                    bot.send_message(message.chat.id,
+                                     config.post_sent,
+                                     reply_markup=send_posts_markup(message, first_msg_id),
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
+                    bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
                 else:
-                    create_photo_message_record(p, user_photos[message.chat.id]['photos'],
-                                                caption=non_empty_caption if non_empty_caption != None else None)
-                    first_message_id = photos[0]
-                    first_msg_id = first_message_id['message_id']
-                    if bot_settings.anonym_func:
-                        bot.send_message(message.chat.id,
-                                         config.post_sent,
-                                         reply_markup=send_posts_markup(message, first_msg_id),
-                                         parse_mode='HTML',
-                                         disable_web_page_preview=True)
-                        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                    else:
-                        m = UserMessage.objects.get(message_id=first_msg_id)
-                        media_list = str(m.file_ids)
-                        media_list = [item.strip() for item in media_list.split(",")]
-                        caption = f'{m.data}'
-                        markup = types.InlineKeyboardMarkup(row_width=1)
-                        send_post = types.InlineKeyboardButton(
-                            text='Запостить',
-                            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-                        )
-                        markup.add(send_post)
-                        bot.send_media_group(message.chat.id,
-                                             [InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                              parse_mode='HTML')
-                                              for index, item in enumerate(media_list)])
-                        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
-                    user_photos.pop(message.chat.id)
-                    p.get_content = False
-                    p.save()
-            #   Если отправляется видео, стопка видео
-            elif message.chat.id in user_videos:
-                videos = user_videos[message.chat.id]['videos']
-                non_empty_caption = find_non_empty_caption(videos)
-                if non_empty_caption == None:
-                    bot.send_message(message.chat.id, config.forbidden_types)
-                    p.get_content = False
-                    p.save()
-                else:
-                    create_video_message_record(p, user_videos[message.chat.id]['videos'],
-                                                caption=non_empty_caption if non_empty_caption != None else None)
-                    first_message_id = videos[0]
-                    first_msg_id = first_message_id['message_id']
-                    if bot_settings.anonym_func:
-                        bot.send_message(message.chat.id,
-                                         config.post_sent,
-                                         reply_markup=send_posts_markup(message, first_msg_id),
-                                         disable_web_page_preview=True,
-                                         parse_mode='HTML')
-                        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                    else:
-                        m = UserMessage.objects.get(message_id=first_msg_id)
-                        media_list = str(m.file_ids)
-                        media_list = [item.strip() for item in media_list.split(",")]
-                        caption = f'{m.data}'
-                        markup = types.InlineKeyboardMarkup(row_width=1)
-                        send_post = types.InlineKeyboardButton(
-                            text='Запостить',
-                            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-                        )
-                        markup.add(send_post)
-                        bot.send_media_group(message.chat.id,
-                                             [InputMediaVideo(media=item, caption=caption if index == 0 else None,
-                                                              parse_mode='HTML')
-                                              for index, item in enumerate(media_list)])
-                        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
-                    user_videos.pop(message.chat.id)
-                    p.get_content = False
-                    p.save()
+                    m = UserMessage.objects.get(message_id=first_msg_id)
+                    media_list = str(m.file_ids)
+                    media_list = [item.strip() for item in media_list.split(",")]
+                    caption = f'{m.data}'
+                    markup = types.InlineKeyboardMarkup(row_width=1)
+                    send_post = types.InlineKeyboardButton(
+                        text='Запостить',
+                        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+                    )
+                    markup.add(send_post)
+                    bot.send_media_group(message.chat.id,
+                                         [InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                                          parse_mode='HTML')
+                                          for index, item in enumerate(media_list)])
+                    bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
+                user_photos.pop(message.chat.id)
+                p.get_content = False
+                p.save()
         else:
             print('Photo sending is already disabled.')
-    if message.text != config.send_to_moderate and p.get_content:
-        p.get_content = False
-        p.save()
-        UserMessage(
-            user=p,
-            data=message.text,
-            message_id=message.id,
-            type='text',
-        ).save()
-        m = UserMessage.objects.get(message_id=message.id)
-        if bot_settings.anonym_func:
-            visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                                  reply_markup=send_posts_markup(message, message.id))
-            bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-            last_user_message[message.chat.id] = visibility_buttons.message_id
+
+
+def publish_video_func(message, p):
+    if p.get_content:
+        remove_reply_markup = types.ReplyKeyboardRemove()
+        videos = user_videos[message.chat.id]['videos']
+        non_empty_caption = find_non_empty_caption(videos)
+        if non_empty_caption is None:
+            ask_for_caption = bot.send_message(message.chat.id, config.no_caption, reply_markup=remove_reply_markup)
+            bot.register_next_step_handler(ask_for_caption,
+                                           get_media_caption,
+                                           profile=p,
+                                           videos=user_videos[message.chat.id]['videos']),
+            p.get_content = False
+            p.save()
         else:
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            send_post = types.InlineKeyboardButton(
-                text='Запостить',
-                callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-            )
-            markup.add(send_post)
-            bot.send_message(message.chat.id, f'Это превью поста:\n\n{m.data}', reply_markup=markup)
+            manage_video_post(message, videos, non_empty_caption, p)
+
+
+def manage_video_post(message, videos, non_empty_caption, p):
+    remove_reply_markup = types.ReplyKeyboardRemove()
+    create_video_message_record(p, user_videos[message.chat.id]['videos'],
+                                caption=non_empty_caption if non_empty_caption is not None else None)
+    first_message_id = videos[0]
+    first_msg_id = first_message_id['message_id']
+    if bot_settings.anonym_func:
+        bot.send_message(message.chat.id,
+                         config.post_sent,
+                         reply_markup=send_posts_markup(message, first_msg_id),
+                         disable_web_page_preview=True,
+                         parse_mode='HTML')
+        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+    else:
+        m = UserMessage.objects.get(message_id=first_msg_id)
+        media_list = str(m.file_ids)
+        media_list = [item.strip() for item in media_list.split(",")]
+        caption = f'{m.data}'
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        send_post = types.InlineKeyboardButton(
+            text='Запостить',
+            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+        )
+        markup.add(send_post)
+        bot.send_media_group(message.chat.id,
+                             [InputMediaVideo(media=item, caption=caption if index == 0 else None,
+                                              parse_mode='HTML')
+                              for index, item in enumerate(media_list)])
+        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
+    user_videos.pop(message.chat.id)
+    p.get_content = False
+    p.save()
+
+
+def get_media_caption(message, **kwargs):
+    media_caption = message.text
+    videos = kwargs.get('videos', [])
+    p = kwargs.get('profile', [])
+    manage_video_post(message, videos, media_caption, p)
+
+
+def publish_text_func(message, p):
+    remove_reply_markup = types.ReplyKeyboardRemove()
+    p.get_content = False
+    p.save()
+    UserMessage(
+        user=p,
+        data=message.text,
+        message_id=message.id,
+        type='text',
+    ).save()
+    m = UserMessage.objects.get(message_id=message.id)
+    if bot_settings.anonym_func:
+        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                              reply_markup=send_posts_markup(message, message.id))
+        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+        last_user_message[message.chat.id] = visibility_buttons.message_id
+    else:
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        send_post = types.InlineKeyboardButton(
+            text='Запостить',
+            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+        )
+        markup.add(send_post)
+        bot.send_message(message.chat.id, f'Это превью поста:\n\n{m.data}', reply_markup=markup)
 
 
 def find_non_empty_caption(photos):
