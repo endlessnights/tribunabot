@@ -343,19 +343,14 @@ def callback_query(call):
         if m.type == 'text':
             for admin in bot_admins:
                 post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
-                if bot_settings.pre_moder:
-                    bot.send_message(admin.tgid,
-                                     post_text,
-                                     reply_markup=markup,
-                                     parse_mode='HTML')
-                else:
-                    bot.send_message(admin.tgid,
-                                     post_text,
-                                     parse_mode='HTML')
-                    post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
-                    #   Сохраняем Message_id поста в канале
-                    m.channel_message_id = post_to_channel.message_id
-                    m.save()
+                bot.send_message(admin.tgid,
+                                 post_text,
+                                 reply_markup=markup,
+                                 parse_mode='HTML')
+            post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
+            #   Сохраняем Message_id поста в канале
+            m.channel_message_id = post_to_channel.message_id
+            m.save()
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
@@ -444,7 +439,9 @@ def callback_query(call):
                 m.save()
             else:
                 if not m.status == 'failed':
-                    bot.delete_message(test_channel_id, m.channel_message_id)
+                    channel_message_ids_list = list(map(int, m.channel_message_id.split(',')))
+                    for channel_message_id in channel_message_ids_list:
+                        bot.delete_message(test_channel_id, channel_message_id)
                     m.status = 'failed'
                     m.sent = False
                     m.save()
@@ -463,9 +460,12 @@ def callback_query(call):
                 m.status = 'failed'
                 m.sent = False
                 m.save()
+                bot.answer_callback_query(call.id, 'Удалено с предупреждением')
             else:
                 if not m.status == 'failed':
-                    bot.delete_message(test_channel_id, m.channel_message_id)
+                    channel_message_ids_list = list(map(int, m.channel_message_id.split(',')))
+                    for channel_message_id in channel_message_ids_list:
+                        bot.delete_message(test_channel_id, channel_message_id)
                     m.status = 'failed'
                     m.sent = False
                     m.save()
@@ -485,6 +485,7 @@ def callback_query(call):
                 p = Accounts.objects.get(tgid=m.user.tgid)
                 p.banned = True
                 p.save()
+                bot.answer_callback_query(call.id, 'Пользователь заблокирован')
             else:
                 bot.answer_callback_query(call.id, 'Юзер уже был забанен другим админом')
         bot.delete_message(call.message.chat.id, call.message.id)
