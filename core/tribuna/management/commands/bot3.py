@@ -575,52 +575,58 @@ def text_message(message):
 
 
 def publish_photo_func(message, p):
-    remove_reply_markup = types.ReplyKeyboardRemove()
-    #   Если нажата кнопка "Запостить"
     if p.get_content:
         #   Если отправляется фото, стопка фото
         if message.chat.id in user_photos:
+            remove_reply_markup = types.ReplyKeyboardRemove()
             photos = user_photos[message.chat.id]['photos']
             non_empty_caption = find_non_empty_caption(photos)
             #   Если нет текста у фото
             if non_empty_caption is None:
-                bot.send_message(message.chat.id, config.no_caption)
+                ask_for_caption = bot.send_message(message.chat.id, config.no_caption, reply_markup=remove_reply_markup)
+                bot.register_next_step_handler(ask_for_caption,
+                                               get_media_caption,
+                                               profile=p,
+                                               type='photo',
+                                               medias=user_photos[message.chat.id]['photos']),
                 p.get_content = False
                 p.save()
-                pass
             else:
-                create_photo_message_record(p, user_photos[message.chat.id]['photos'],
-                                            caption=non_empty_caption if non_empty_caption is not None else None)
-                first_message_id = photos[0]
-                first_msg_id = first_message_id['message_id']
-                if bot_settings.anonym_func:
-                    bot.send_message(message.chat.id,
-                                     config.post_sent,
-                                     reply_markup=send_posts_markup(message, first_msg_id),
-                                     parse_mode='HTML',
-                                     disable_web_page_preview=True)
-                    bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-                else:
-                    m = UserMessage.objects.get(message_id=first_msg_id)
-                    media_list = str(m.file_ids)
-                    media_list = [item.strip() for item in media_list.split(",")]
-                    caption = f'{m.data}'
-                    markup = types.InlineKeyboardMarkup(row_width=1)
-                    send_post = types.InlineKeyboardButton(
-                        text='Запостить',
-                        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-                    )
-                    markup.add(send_post)
-                    bot.send_media_group(message.chat.id,
-                                         [InputMediaPhoto(media=item, caption=caption if index == 0 else None,
-                                                          parse_mode='HTML')
-                                          for index, item in enumerate(media_list)])
-                    bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
-                user_photos.pop(message.chat.id)
-                p.get_content = False
-                p.save()
-        else:
-            print('Photo sending is already disabled.')
+                manage_photo_post(message, photos, non_empty_caption, p)
+
+
+def manage_photo_post(message, photos, non_empty_caption, p):
+    remove_reply_markup = types.ReplyKeyboardRemove()
+    create_photo_message_record(p, user_photos[message.chat.id]['photos'],
+                                caption=non_empty_caption if non_empty_caption is not None else None)
+    first_message_id = photos[0]
+    first_msg_id = first_message_id['message_id']
+    if bot_settings.anonym_func:
+        bot.send_message(message.chat.id,
+                         config.post_sent,
+                         reply_markup=send_posts_markup(message, first_msg_id),
+                         parse_mode='HTML',
+                         disable_web_page_preview=True)
+        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+    else:
+        m = UserMessage.objects.get(message_id=first_msg_id)
+        media_list = str(m.file_ids)
+        media_list = [item.strip() for item in media_list.split(",")]
+        caption = f'{m.data}'
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        send_post = types.InlineKeyboardButton(
+            text='Запостить',
+            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+        )
+        markup.add(send_post)
+        bot.send_media_group(message.chat.id,
+                             [InputMediaPhoto(media=item, caption=caption if index == 0 else None,
+                                              parse_mode='HTML')
+                              for index, item in enumerate(media_list)])
+        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
+    user_photos.pop(message.chat.id)
+    p.get_content = False
+    p.save()
 
 
 def publish_video_func(message, p):
@@ -633,7 +639,8 @@ def publish_video_func(message, p):
             bot.register_next_step_handler(ask_for_caption,
                                            get_media_caption,
                                            profile=p,
-                                           videos=user_videos[message.chat.id]['videos']),
+                                           type='video',
+                                           medias=user_videos[message.chat.id]['videos']),
             p.get_content = False
             p.save()
         else:
@@ -663,6 +670,7 @@ def manage_video_post(message, videos, non_empty_caption, p):
             text='Запостить',
             callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
         )
+        remove_reply_markup = types.ReplyKeyboardRemove()
         markup.add(send_post)
         bot.send_media_group(message.chat.id,
                              [InputMediaVideo(media=item, caption=caption if index == 0 else None,
@@ -676,9 +684,13 @@ def manage_video_post(message, videos, non_empty_caption, p):
 
 def get_media_caption(message, **kwargs):
     media_caption = message.text
-    videos = kwargs.get('videos', [])
+    medias = kwargs.get('medias', [])
     p = kwargs.get('profile', [])
-    manage_video_post(message, videos, media_caption, p)
+    media_type = kwargs.get('type', [])
+    if media_type == 'video':
+        manage_video_post(message, medias, media_caption, p)
+    elif media_type == 'photo':
+        manage_photo_post(message, medias, media_caption, p)
 
 
 def publish_text_func(message, p):
