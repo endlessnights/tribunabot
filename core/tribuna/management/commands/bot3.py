@@ -525,19 +525,24 @@ def forbidden_content(message):
 @bot.message_handler(content_types=['poll'])
 def poll_message(message):
     p = Accounts.objects.get(tgid=message.chat.id)
-    print(message.poll)
     if p.get_content:
+        options = [option.text for option in message.poll.options]
         UserMessage(
             user=p,
             type='poll',
             question=message.poll.question,
-            options=json.dumps([option.text for option in message.poll.options]),
+            options=json.dumps(options),
             allows_multiple_answers_poll=message.poll.allows_multiple_answers,
             is_anonymous_poll=message.poll.is_anonymous,
             poll_id=message.poll.id
         ).save()
         m = UserMessage.objects.get(poll_id=message.poll.id)
-        # bot.send_poll(message.chat.id, m.question, m.options, )
+        poll_options = json.loads(m.options)
+        bot.send_poll(message.chat.id,
+                      question=m.question,
+                      options=poll_options,
+                      is_anonymous=m.is_anonymous_poll,
+                      allows_multiple_answers=m.allows_multiple_answers_poll)
 
 
 @bot.message_handler(content_types=['text'])

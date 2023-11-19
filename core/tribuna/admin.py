@@ -24,11 +24,11 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'user',
-        'anonym',
-        'status',
-        'sent',
-        'message_id',
         'type',
+        'anonym',
+        'sent',
+        'status',
+        'message_id',
         'data',
 
     ]
