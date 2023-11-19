@@ -174,19 +174,33 @@ def start_bot(message):
         bot.send_message(message.chat.id, config.block_msg)
 
 
-def send_posts_markup(message, first_msg_id):
-    m = UserMessage.objects.get(message_id=first_msg_id)
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    send_public = types.InlineKeyboardButton(
-        text='Отправить пост публично',
-        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-    )
-    send_anonym = types.InlineKeyboardButton(
-        text='Отправить пост анонимно',
-        callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=True"
-    )
-    markup.add(send_public, send_anonym)
-    return markup
+def send_posts_markup(message, first_msg_id, type):
+    if not type == 'poll':
+        m = UserMessage.objects.get(message_id=first_msg_id)
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        send_public = types.InlineKeyboardButton(
+            text='Отправить пост публично',
+            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+        )
+        send_anonym = types.InlineKeyboardButton(
+            text='Отправить пост анонимно',
+            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=True"
+        )
+        markup.add(send_public, send_anonym)
+        return markup
+    else:
+        m = UserMessage.objects.get(poll_id=message.poll.id)
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        send_public = types.InlineKeyboardButton(
+            text='Отправить пост публично',
+            callback_data=f"send_post,{message.chat.id},{m.poll_id},anonym=False"
+        )
+        send_anonym = types.InlineKeyboardButton(
+            text='Отправить пост анонимно',
+            callback_data=f"send_post,{message.chat.id},{m.poll_id},anonym=True"
+        )
+        markup.add(send_public, send_anonym)
+        return markup
 
 
 @bot.message_handler(commands=['new'])
@@ -308,7 +322,10 @@ def callback_query(call):
         post_author = int(callback_data[1])
         message_id = int(callback_data[2])
         anonym = callback_data[3].split('=')[1]
-        m = UserMessage.objects.get(message_id=message_id)
+        try:
+            m = UserMessage.objects.get(message_id=message_id)
+        except Exception as e:
+            m = UserMessage.objects.get(poll_id=message_id)
         if anonym == 'True':
             m.anonym = True
             m.save()
@@ -323,34 +340,34 @@ def callback_query(call):
             markup = types.InlineKeyboardMarkup(row_width=2)
             accept_post = types.InlineKeyboardButton(
                 text='✅',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=True"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=True"
             )
             cancel_post = types.InlineKeyboardButton(
                 text='❌',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=False"
             )
             warn_delete_post = types.InlineKeyboardButton(
                 text='Удалить и предупредить',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=Warn"
             )
             block_user = types.InlineKeyboardButton(
                 text='Заблокировать юзера',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=Block"
             )
             markup.add(accept_post, cancel_post, warn_delete_post, block_user)
         else:
             markup = types.InlineKeyboardMarkup(row_width=1)
             cancel_post = types.InlineKeyboardButton(
                 text='Удалить',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=False"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=False"
             )
             warn_delete_post = types.InlineKeyboardButton(
                 text='Удалить и предупредить',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Warn"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=Warn"
             )
             block_user = types.InlineKeyboardButton(
                 text='Заблокировать юзера',
-                callback_data=f"post_accept_action,{m.message_id},{anonym},accept=Block"
+                callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=Block"
             )
             markup.add(cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
@@ -362,6 +379,19 @@ def callback_query(call):
                                  parse_mode='HTML')
             post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             #   Сохраняем Message_id поста в канале
+            m.channel_message_id = post_to_channel.message_id
+            m.save()
+        elif m.type == 'poll':
+            poll_options = json.loads(m.options)
+            for admin in bot_admins:
+                bot.send_poll(admin.tgid,
+                              question=m.question,
+                              options=poll_options,
+                              allows_multiple_answers=m.allows_multiple_answers_poll)
+            post_to_channel = bot.send_poll(test_channel_id,
+                                            question=m.question,
+                                            options=poll_options,
+                                            allows_multiple_answers=m.allows_multiple_answers_poll)
             m.channel_message_id = post_to_channel.message_id
             m.save()
         elif m.type == 'photo' or 'video':
@@ -526,6 +556,7 @@ def forbidden_content(message):
 def poll_message(message):
     p = Accounts.objects.get(tgid=message.chat.id)
     if p.get_content:
+        remove_reply_markup = types.ReplyKeyboardRemove()
         options = [option.text for option in message.poll.options]
         UserMessage(
             user=p,
@@ -533,18 +564,27 @@ def poll_message(message):
             question=message.poll.question,
             options=json.dumps(options),
             allows_multiple_answers_poll=message.poll.allows_multiple_answers,
-            is_anonymous_poll=message.poll.is_anonymous,
             poll_id=message.poll.id
         ).save()
         m = UserMessage.objects.get(poll_id=message.poll.id)
         poll_options = json.loads(m.options)
-        bot.send_poll(message.chat.id,
-                      question=m.question,
-                      options=poll_options,
-                      is_anonymous=m.is_anonymous_poll,
-                      allows_multiple_answers=m.allows_multiple_answers_poll)
-
-
+        if bot_settings.anonym_func:
+            visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                                  reply_markup=send_posts_markup(message, message.poll.id, type='poll'))
+            bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+            last_user_message[message.chat.id] = visibility_buttons.message_id
+        else:
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            send_post = types.InlineKeyboardButton(
+                text='Запостить',
+                callback_data=f"send_post,{message.chat.id},{message.poll.id},anonym=False"
+            )
+            markup.add(send_post)
+            bot.send_poll(message.chat.id,
+                          question=m.question,
+                          options=poll_options,
+                          allows_multiple_answers=m.allows_multiple_answers_poll)
+            bot.send_message(message.chat.id, f'Это превью поста', reply_markup=markup)
 @bot.message_handler(content_types=['text'])
 def text_message(message):
     #   Показываем посты на ПреМодерации админам бота
@@ -627,7 +667,7 @@ def manage_photo_post(message, photos, non_empty_caption, p):
     if bot_settings.anonym_func:
         bot.send_message(message.chat.id,
                          config.post_sent,
-                         reply_markup=send_posts_markup(message, first_msg_id),
+                         reply_markup=send_posts_markup(message, first_msg_id, type='photo'),
                          parse_mode='HTML',
                          disable_web_page_preview=True)
         bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
@@ -679,7 +719,7 @@ def manage_video_post(message, videos, non_empty_caption, p):
     if bot_settings.anonym_func:
         bot.send_message(message.chat.id,
                          config.post_sent,
-                         reply_markup=send_posts_markup(message, first_msg_id),
+                         reply_markup=send_posts_markup(message, first_msg_id, type='video'),
                          disable_web_page_preview=True,
                          parse_mode='HTML')
         bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
@@ -729,7 +769,7 @@ def publish_text_func(message, p):
     m = UserMessage.objects.get(message_id=message.id)
     if bot_settings.anonym_func:
         visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message, message.id))
+                                              reply_markup=send_posts_markup(message, message.id, type='text'))
         bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
         last_user_message[message.chat.id] = visibility_buttons.message_id
     else:

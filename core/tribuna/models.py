@@ -63,7 +63,7 @@ class UserMessage(models.Model):
     question = models.CharField(max_length=1000, blank=True, null=True)
     options = models.CharField(max_length=2000, blank=True, null=True)
     allows_multiple_answers_poll = models.CharField(max_length=10, blank=True, null=True)
-    is_anonymous_poll = models.CharField(max_length=10, blank=True, null=True)
+    # is_anonymous_poll = models.CharField(max_length=10, blank=True, null=True)    #   На канале нельзя публиковать не-анонимные опросы
     poll_id = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
