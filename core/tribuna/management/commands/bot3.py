@@ -372,16 +372,24 @@ def callback_query(call):
             )
             markup.add(cancel_post, warn_delete_post, block_user)
         if m.type == 'text':
-            for admin in bot_admins:
-                post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
-                bot.send_message(admin.tgid,
-                                 post_text,
-                                 reply_markup=markup,
-                                 parse_mode='HTML')
-            post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
-            #   Сохраняем Message_id поста в канале
-            m.channel_message_id = post_to_channel.message_id
-            m.save()
+            if not bot_settings.pre_moder:
+                for admin in bot_admins:
+                    post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+                    bot.send_message(admin.tgid,
+                                     post_text,
+                                     reply_markup=markup,
+                                     parse_mode='HTML')
+                post_to_channel = bot.send_message(test_channel_id, post_text, parse_mode='HTML')
+                #   Сохраняем Message_id поста в канале
+                m.channel_message_id = post_to_channel.message_id
+                m.save()
+            else:
+                for admin in bot_admins:
+                    post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+                    bot.send_message(admin.tgid,
+                                     post_text,
+                                     reply_markup=markup,
+                                     parse_mode='HTML')
         elif m.type == 'poll':
             if not bot_settings.pre_moder:
                 poll_options = json.loads(m.options)
