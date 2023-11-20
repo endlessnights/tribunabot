@@ -1,13 +1,12 @@
 import json
 import os
 import re
-import time
 import requests
 from django.core.management import BaseCommand
 from django.utils import timezone
 from telebot import TeleBot, types
 from requests.exceptions import Timeout
-from telebot.types import CallbackQuery, InputMediaPhoto, InputMediaVideo
+from telebot.types import InputMediaPhoto, InputMediaVideo
 
 from . import config
 from ...models import Accounts, UserMessage, BotSettings
