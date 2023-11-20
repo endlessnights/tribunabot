@@ -317,6 +317,8 @@ def create_video_message_record(p, videos, caption):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    bot_settings = BotSettings.objects.first()
+    bot_admins = Accounts.objects.filter(is_admin=True)
     if str(call.data).startswith('send_post'):
         callback_data = call.data.split(',')
         post_author = int(callback_data[1])
@@ -382,18 +384,32 @@ def callback_query(call):
             m.channel_message_id = post_to_channel.message_id
             m.save()
         elif m.type == 'poll':
-            poll_options = json.loads(m.options)
-            for admin in bot_admins:
-                bot.send_poll(admin.tgid,
-                              question=m.question,
-                              options=poll_options,
-                              allows_multiple_answers=m.allows_multiple_answers_poll)
-            post_to_channel = bot.send_poll(test_channel_id,
-                                            question=m.question,
-                                            options=poll_options,
-                                            allows_multiple_answers=m.allows_multiple_answers_poll)
-            m.channel_message_id = post_to_channel.message_id
-            m.save()
+            if not bot_settings.pre_moder:
+                poll_options = json.loads(m.options)
+                for admin in bot_admins:
+                    bot.send_poll(admin.tgid,
+                                  question=m.question,
+                                  options=poll_options,
+                                  allows_multiple_answers=m.allows_multiple_answers_poll)
+                question_text = f'{m.question}\n{"Автор: " + m.user.clubname if not m.anonym else ""}'
+                post_to_channel = bot.send_poll(test_channel_id,
+                                                question=question_text,
+                                                options=poll_options,
+                                                allows_multiple_answers=m.allows_multiple_answers_poll)
+                m.channel_message_id = post_to_channel.message_id
+                m.save()
+            else:
+                poll_options = json.loads(m.options)
+                for admin in bot_admins:
+                    bot.send_poll(admin.tgid,
+                                  question=m.question,
+                                  options=poll_options,
+                                  allows_multiple_answers=m.allows_multiple_answers_poll)
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nОтправлен опрос\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     reply_markup=markup,
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
@@ -451,7 +467,11 @@ def callback_query(call):
         message_id = int(callback_data[1])
         anonym = str(callback_data[2])
         action = callback_data[3].split('=')[1]
-        m = UserMessage.objects.get(message_id=message_id)
+        try:
+            m = UserMessage.objects.get(message_id=message_id)
+        except Exception as e:
+            print(e)
+            m = UserMessage.objects.get(poll_id=message_id)
         if action == 'True':
             if m.type == 'text':
                 post_text = (
@@ -472,6 +492,16 @@ def callback_query(call):
                     index, item in enumerate(media_list)])
                 channel_message_ids = [message.message_id for message in post_to_channel]
                 m.channel_message_id = ','.join(map(str, channel_message_ids))
+                m.save()
+            elif m.type == 'poll':
+                question_text = f'{m.question}\n{"Автор: "+m.user.clubname if not m.anonym else ""}'
+                print(question_text)
+                poll_options = json.loads(m.options)
+                post_to_channel = bot.send_poll(test_channel_id,
+                                                question=question_text,
+                                                options=poll_options,
+                                                allows_multiple_answers=m.allows_multiple_answers_poll)
+                m.channel_message_id = post_to_channel.message_id
                 m.save()
             user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML',
                                                disable_web_page_preview=True)
@@ -554,6 +584,7 @@ def forbidden_content(message):
 
 @bot.message_handler(content_types=['poll'])
 def poll_message(message):
+    bot_settings = BotSettings.objects.first()
     p = Accounts.objects.get(tgid=message.chat.id)
     if p.get_content:
         remove_reply_markup = types.ReplyKeyboardRemove()
@@ -589,6 +620,7 @@ def poll_message(message):
 def text_message(message):
     #   Показываем посты на ПреМодерации админам бота
     p = Accounts.objects.get(tgid=message.chat.id)
+    bot_admins = Accounts.objects.filter(is_admin=True)
     if str(message.chat.id) in str(bot_admins):
         if message.text == config.moderation_list:
             posts = UserMessage.objects.filter(status='wait')
@@ -659,6 +691,7 @@ def publish_photo_func(message, p):
 
 
 def manage_photo_post(message, photos, non_empty_caption, p):
+    bot_settings = BotSettings.objects.first()
     remove_reply_markup = types.ReplyKeyboardRemove()
     create_photo_message_record(p, user_photos[message.chat.id]['photos'],
                                 caption=non_empty_caption if non_empty_caption is not None else None)
@@ -711,6 +744,7 @@ def publish_video_func(message, p):
 
 
 def manage_video_post(message, videos, non_empty_caption, p):
+    bot_settings = BotSettings.objects.first()
     remove_reply_markup = types.ReplyKeyboardRemove()
     create_video_message_record(p, user_videos[message.chat.id]['videos'],
                                 caption=non_empty_caption if non_empty_caption is not None else None)
@@ -757,6 +791,7 @@ def get_media_caption(message, **kwargs):
 
 
 def publish_text_func(message, p):
+    bot_settings = BotSettings.objects.first()
     remove_reply_markup = types.ReplyKeyboardRemove()
     p.get_content = False
     p.save()
