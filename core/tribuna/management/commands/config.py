@@ -39,13 +39,14 @@ forbidden_types = '''
 public_text_post = '''
 {}
 ©️{} (<a href="https://vas3k.club/user/{}">{}</a>)
-Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
 '''
 anonym_text_post = '''
 {}
 
-Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>
+
 '''
+
+ttt = 'Запостить в <a href="https://t.me/instagram_directbot">Вастрик.Трибуну</a>'
 moderation_list = 'Модерация постов'
 send_to_moderate = 'Запостить'
 post_sent = 'Сообщение отправлено в <a href="https://t.me/+LHnmfbNIdM9kNmNi">Вастрик.Трибуна</a>'

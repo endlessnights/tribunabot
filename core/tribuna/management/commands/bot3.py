@@ -247,7 +247,7 @@ def photo_message(message):
                 'file_id': message.photo[-1].file_id,
                 'caption': caption
             })
-            # If the user has sent 10 photos, disable further photo zsending
+            # If the user has sent 10 photos, disable further photo sending
             if user_photos[message.chat.id]['count'] > 10:
                 p.get_content = False
                 p.save()
@@ -477,6 +477,15 @@ def callback_query(call):
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
                         m.data, m.user.clubname, m.user.clublogin, m.user.clublogin, ))
                 bot.send_message(test_channel_id, post_text, parse_mode='HTML')
+            elif m.type == 'poll':
+                question_text = f'{m.question}\n{"Автор: "+m.user.clubname if not m.anonym else ""}'
+                poll_options = json.loads(m.options)
+                post_to_channel = bot.send_poll(test_channel_id,
+                                                question=question_text,
+                                                options=poll_options,
+                                                allows_multiple_answers=m.allows_multiple_answers_poll)
+                m.channel_message_id = post_to_channel.message_id
+                m.save()
             elif m.type == 'photo' or 'video':
                 media_list = str(m.file_ids)
                 media_list = [item.strip() for item in media_list.split(",")]
@@ -491,16 +500,6 @@ def callback_query(call):
                     index, item in enumerate(media_list)])
                 channel_message_ids = [message.message_id for message in post_to_channel]
                 m.channel_message_id = ','.join(map(str, channel_message_ids))
-                m.save()
-            elif m.type == 'poll':
-                question_text = f'{m.question}\n{"Автор: "+m.user.clubname if not m.anonym else ""}'
-                print(question_text)
-                poll_options = json.loads(m.options)
-                post_to_channel = bot.send_poll(test_channel_id,
-                                                question=question_text,
-                                                options=poll_options,
-                                                allows_multiple_answers=m.allows_multiple_answers_poll)
-                m.channel_message_id = post_to_channel.message_id
                 m.save()
             user_succ_reply = bot.send_message(m.user.tgid, config.post_sent, parse_mode='HTML',
                                                disable_web_page_preview=True)
@@ -615,6 +614,8 @@ def poll_message(message):
                           options=poll_options,
                           allows_multiple_answers=m.allows_multiple_answers_poll)
             bot.send_message(message.chat.id, f'Это превью поста', reply_markup=markup)
+
+
 @bot.message_handler(content_types=['text'])
 def text_message(message):
     #   Показываем посты на ПреМодерации админам бота
