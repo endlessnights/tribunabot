@@ -173,6 +173,37 @@ def start_bot(message):
         bot.send_message(message.chat.id, config.block_msg)
 
 
+@bot.message_handler(commands=['admin'])
+def admin_bot(message):
+    try:
+        if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            block_user = types.InlineKeyboardButton(
+                text='Заблокировать пользователя',
+                callback_data=f"admin_actions,action=block_user"
+            )
+            unlock_user = types.InlineKeyboardButton(
+                text='Разблокировать пользователя',
+                callback_data=f"admin_actions,action=unlock_user"
+            )
+            banned_list = types.InlineKeyboardButton(
+                text='Просмотреть блок-лист',
+                callback_data=f"admin_actions,action=banned_list"
+            )
+            add_admin = types.InlineKeyboardButton(
+                text='Добавить админа',
+                callback_data=f"admin_actions,action=add_admin"
+            )
+            admin_list = types.InlineKeyboardButton(
+                text='Список админов',
+                callback_data=f"admin_actions,action=admin_list"
+            )
+            markup.add(block_user, unlock_user, banned_list, add_admin, admin_list)
+            bot.send_message(message.chat.id, 'Команды администратора бота', reply_markup=markup)
+    except Exception as e:
+        print(e)
+
+
 def send_posts_markup(message, first_msg_id, type):
     if not type == 'poll':
         m = UserMessage.objects.get(message_id=first_msg_id)
@@ -486,7 +517,7 @@ def callback_query(call):
                         m.data, m.user.clubname, m.user.clublogin, m.user.clublogin, ))
                 bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             elif m.type == 'poll':
-                question_text = f'{m.question}\n{"Автор: "+m.user.clubname if not m.anonym else ""}'
+                question_text = f'{m.question}\n{"Автор: " + m.user.clubname if not m.anonym else ""}'
                 poll_options = json.loads(m.options)
                 post_to_channel = bot.send_poll(test_channel_id,
                                                 question=question_text,
@@ -573,6 +604,48 @@ def callback_query(call):
                 bot.answer_callback_query(call.id, 'Юзер уже был забанен другим админом')
         bot.delete_message(call.message.chat.id, call.message.id)
         bot.answer_callback_query(call.id)
+    # admin actions:
+    #   block_user
+    #   unlock_user
+    #   banned_list
+    #   add_admin
+    #   rem_admin
+    #   admin_list
+    if str(call.data).startswith('admin_actions'):
+        callback_data = call.data.split(',')
+        action = callback_data[1].split('=')[1]
+        if action == 'block_user':
+            block_user_msg = bot.send_message(call.message.chat.id,
+                                              'Отправьте юзернейм пользователя или его уникальный идентификатор')
+            bot.register_next_step_handler(block_user_msg, block_user_func)
+        if action == 'unlock_user':
+            unblock_user_msg = bot.send_message(call.message.chat.id,
+                                                'Отправьте юзернейм пользователя или его уникальный идентификатор')
+            bot.register_next_step_handler(unblock_user_msg, unblock_user_func)
+        if action == 'banned_list':
+            for user_item in Accounts.objects.filter(banned=True):
+                bot.send_message(
+                    chat_id=call.message.chat.id,
+                    text=f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}'
+                )
+            # bot.register_next_step_handler(block_user_msg, block_user_func)
+        if action == 'add_admin':
+            unblock_user_msg = bot.send_message(call.message.chat.id,
+                                                'Отправьте юзернейм пользователя или его уникальный идентификатор')
+            bot.register_next_step_handler(unblock_user_msg, unblock_user_func)
+        if action == 'admin_list':
+            admin_list_prev = bot.send_message(call.message.chat.id, 'Список админов бота')
+            for user_item in Accounts.objects.filter(is_admin=True):
+                bot.send_message(call.message.chat.id, f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}')
+            # bot.register_next_step_handler(admin_list, unblock_user_func)
+
+
+def block_user_func(message):
+    pass
+
+
+def unblock_user_func(message):
+    pass
 
 
 # Define a dictionary to store user photo information
