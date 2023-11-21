@@ -618,34 +618,79 @@ def callback_query(call):
             block_user_msg = bot.send_message(call.message.chat.id,
                                               'Отправьте юзернейм пользователя или его уникальный идентификатор')
             bot.register_next_step_handler(block_user_msg, block_user_func)
-        if action == 'unlock_user':
-            unblock_user_msg = bot.send_message(call.message.chat.id,
-                                                'Отправьте юзернейм пользователя или его уникальный идентификатор')
-            bot.register_next_step_handler(unblock_user_msg, unblock_user_func)
         if action == 'banned_list':
             for user_item in Accounts.objects.filter(banned=True):
+                user_tgid = user_item.tgid
+                callback_data = f'unlock_user,{user_tgid}'
+                markup = types.InlineKeyboardMarkup(row_width=1)
+                unlock_user = types.InlineKeyboardButton(
+                    text=f'Разблокировать {user_tgid} 👆',
+                    callback_data=callback_data
+                )
+                markup.add(unlock_user)
                 bot.send_message(
                     chat_id=call.message.chat.id,
-                    text=f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}'
+                    text=f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}',
+                    reply_markup=markup
                 )
+
             # bot.register_next_step_handler(block_user_msg, block_user_func)
         if action == 'add_admin':
-            unblock_user_msg = bot.send_message(call.message.chat.id,
-                                                'Отправьте юзернейм пользователя или его уникальный идентификатор')
-            bot.register_next_step_handler(unblock_user_msg, unblock_user_func)
+            add_admin_msg = bot.send_message(call.message.chat.id,
+                                             'Отправьте юзернейм пользователя или его уникальный идентификатор')
+            bot.register_next_step_handler(add_admin_msg, add_admin_func)
         if action == 'admin_list':
-            admin_list_prev = bot.send_message(call.message.chat.id, 'Список админов бота')
+            admin_list_prev = bot.send_message(call.message.chat.id, 'Список админов бота:')
+
             for user_item in Accounts.objects.filter(is_admin=True):
-                bot.send_message(call.message.chat.id, f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}')
-            # bot.register_next_step_handler(admin_list, unblock_user_func)
+                user_tgid = user_item.tgid
+                callback_data = f"admin_rem,{user_tgid}"
+                markup = types.InlineKeyboardMarkup(row_width=1)
+                rem_admin = types.InlineKeyboardButton(
+                    text=f'Удалить админа {user_tgid} 👆',
+                    callback_data=callback_data
+                )
+                markup.add(rem_admin)
+                bot.send_message(call.message.chat.id,
+                                 f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}',
+                                 reply_markup=markup)
+    if str(call.data).startswith('admin_rem'):
+        callback_data = call.data.split(',')
+        admin_id = str(callback_data[1])
+        p = Accounts.objects.get(tgid=admin_id)
+        p.is_admin = False
+        p.save()
+        bot.answer_callback_query(call.id, f'Пользователь {p.tgid} был удален из списка админов!')
+    if str(call.data).startswith('unlock_user'):
+        callback_data = call.data.split(',')
+        user_id = str(callback_data[1])
+        p = Accounts.objects.get(tgid=user_id)
+        p.banned = False
+        p.save()
+        bot.answer_callback_query(call.id, f'Пользователь {p.tgid} был разблокирован!')
+        #   Пытаемся отправить пользователю сообщение, что его разблокировали
+        try:
+            bot.send_message(p.tgid, config.unblock_msg)
+        except Exception as e:
+            print(f'unlock_user callback: {e}')
 
 
 def block_user_func(message):
     pass
 
 
-def unblock_user_func(message):
-    pass
+def add_admin_func(message):
+    user_id = message.text
+    try:
+        p = Accounts.objects.get(tgid=user_id)
+        if not p.is_admin:
+            p.is_admin = True
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был назначен админом бота!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} уже является админом бота!')
+    except Exception as e:
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
 
 
 # Define a dictionary to store user photo information
