@@ -167,8 +167,13 @@ def start_bot(message):
                 p.has_access = True
                 p.save()
         else:
-            bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message),
-                             parse_mode='HTML')
+            if bot_settings.pre_moder:
+                print('pre-moder')
+                bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message),
+                                 parse_mode='HTML')
+            else:
+                bot.send_message(message.chat.id, config.hello_registered_user,
+                                 parse_mode='HTML')
     else:
         bot.send_message(message.chat.id, config.block_msg)
 
@@ -176,6 +181,7 @@ def start_bot(message):
 @bot.message_handler(commands=['admin'])
 def admin_bot(message):
     try:
+        bot_settings = BotSettings.objects.first()
         if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
             markup = types.InlineKeyboardMarkup(row_width=1)
             block_user = types.InlineKeyboardButton(
@@ -184,7 +190,7 @@ def admin_bot(message):
             )
             unlock_user = types.InlineKeyboardButton(
                 text='Разблокировать пользователя',
-                callback_data=f"admin_actions,action=unlock_user"
+                callback_data=f"admin_actions,action=unlock_user_inline"
             )
             banned_list = types.InlineKeyboardButton(
                 text='Просмотреть блок-лист',
@@ -198,7 +204,23 @@ def admin_bot(message):
                 text='Список админов',
                 callback_data=f"admin_actions,action=admin_list"
             )
-            markup.add(block_user, unlock_user, banned_list, add_admin, admin_list)
+            if not bot_settings.pre_moder:
+                pre_moder_switch_text = 'Включить пре-модерацию'
+            else:
+                pre_moder_switch_text = 'Выключить пре-модерацию'
+            pre_moder_switch = types.InlineKeyboardButton(
+                text=pre_moder_switch_text,
+                callback_data=f"admin_actions,action=pre_moder"
+            )
+            if not bot_settings.anonym_func:
+                anonym_switch_text = 'Включить анонимность'
+            else:
+                anonym_switch_text = 'Выключить анонимность'
+            anonym_switch = types.InlineKeyboardButton(
+                text=anonym_switch_text,
+                callback_data=f"admin_actions,action=anonym_func"
+            )
+            markup.add(block_user, unlock_user, banned_list, add_admin, admin_list, pre_moder_switch, anonym_switch)
             bot.send_message(message.chat.id, 'Команды администратора бота', reply_markup=markup)
     except Exception as e:
         print(e)
@@ -611,6 +633,8 @@ def callback_query(call):
     #   add_admin
     #   rem_admin
     #   admin_list
+    #   pre_moder
+    #   anonym_func
     if str(call.data).startswith('admin_actions'):
         callback_data = call.data.split(',')
         action = callback_data[1].split('=')[1]
@@ -654,6 +678,28 @@ def callback_query(call):
                 bot.send_message(call.message.chat.id,
                                  f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}',
                                  reply_markup=markup)
+        if action == 'unlock_user_inline':
+            unlock_user_msg = bot.send_message(call.message.chat.id,
+                                             'Отправьте юзернейм пользователя или его уникальный идентификатор')
+            bot.register_next_step_handler(unlock_user_msg, unlock_user_func)
+        if action == 'pre_moder':
+            if bot_settings.pre_moder:
+                bot_settings.pre_moder = False
+                bot.answer_callback_query(call.id, 'Премодерация отключена!')
+                bot_settings.save()
+            else:
+                bot_settings.pre_moder = True
+                bot.answer_callback_query(call.id, 'Премодерация включена!')
+                bot_settings.save()
+        if action == 'anonym_func':
+            if bot_settings.anonym_func:
+                bot_settings.anonym_func = False
+                bot.answer_callback_query(call.id, 'Анонимность отключена!')
+                bot_settings.save()
+            else:
+                bot_settings.anonym_func = True
+                bot.answer_callback_query(call.id, 'Анонимность включена!')
+                bot_settings.save()
     if str(call.data).startswith('admin_rem'):
         callback_data = call.data.split(',')
         admin_id = str(callback_data[1])
@@ -676,7 +722,31 @@ def callback_query(call):
 
 
 def block_user_func(message):
-    pass
+    user_id = message.text
+    try:
+        p = Accounts.objects.get(tgid=user_id)
+        if not p.banned:
+            p.banned = True
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был заблокирован!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был заблокирован ранее!')
+    except Exception as e:
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
+
+
+def unlock_user_func(message):
+    user_id = message.text
+    try:
+        p = Accounts.objects.get(tgid=user_id)
+        if p.banned:
+            p.banned = False
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был разблокирован!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} не был заблокирован ранее!')
+    except Exception as e:
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
 
 
 def add_admin_func(message):
