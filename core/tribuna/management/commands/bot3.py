@@ -132,50 +132,28 @@ def start_bot(message):
         )
     except Exception as e:
         # Handle any exceptions that may occur during UserProfile creation/update
-        print(f"An error occurred: {e}")
-
+        print(f"An error occurred in def start_bot: {e}")
     p = Accounts.objects.get(tgid=message.chat.id)
     p.get_content = False
+    p.has_access = True
     p.save()
-    if not p.banned:
-        if not p.has_access:
-            #   Делаем запрос в vas3k.club, получаем данные учетки из клуба, если бот привязан
-            club_profile_info = get_club_profile(message.chat.id)
-            if club_profile_info is not None:
-                p = Accounts.objects.get(tgid=message.chat.id)
-                p.has_access = True
-                club_profile_slug, club_full_name = club_profile_info
-                bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
-            #   Если бот не привязан, то запрашиваем пароль (указан в профиле клуба)
-            #   Или если сайт vas3k клуба возвращает не 200
-            else:
-                try:
-                    p = Accounts.objects.get(tgid=message.chat.id)
-                    if p.has_access:
-                        bot.send_message(message.chat.id, config.hello_new_user, parse_mode='HTML')
-                    else:
-                        get_user_password = bot.send_message(
-                            message.chat.id, f'{config.start_text_new.format(p.tgname)}\n{config.ask_password}',
-                            parse_mode='HTML')
-                        bot.register_next_step_handler(get_user_password, get_user_password_input)
-                except Exception as e:
-                    print(f'{e}:111')
-
-            if club_profile_info is not None:
-                p.clublogin = club_profile_slug
-                p.clubname = club_full_name
-                p.has_access = True
-                p.save()
-        else:
-            if bot_settings.pre_moder:
-                print('pre-moder')
-                bot.send_message(message.chat.id, config.hello_registered_user, reply_markup=show_keyboard_buttons(message),
-                                 parse_mode='HTML')
-            else:
-                bot.send_message(message.chat.id, config.hello_registered_user,
-                                 parse_mode='HTML')
-    else:
-        bot.send_message(message.chat.id, config.block_msg)
+    #   Пытаемся узнать, является ли пользлватель участником Вастрик.Клуба
+    try:
+        club_profile_info = get_club_profile(message.chat.id)
+        club_profile_slug, club_full_name = club_profile_info
+        p.clublogin = club_profile_slug
+        p.clubname = club_full_name
+        p.has_access = True
+        p.save()
+    except Exception as e:
+        print(e)
+    try:
+        if p.has_access:
+            bot.send_message(message.chat.id,
+                             config.hello_registered_user,
+                             parse_mode='HTML')
+    except Exception as e:
+        print(e)
 
 
 @bot.message_handler(commands=['admin'])
@@ -229,7 +207,9 @@ def admin_bot(message):
                 markup.add(block_user, unlock_user, banned_list, add_admin, add_super_admin, admin_list, pre_moder_switch, anonym_switch)
             else:
                 markup.add(block_user, unlock_user, banned_list)
-            bot.send_message(message.chat.id, 'Команды администратора бота', reply_markup=markup)
+            delete_prev_message(message)
+            show_admin_menu = bot.send_message(message.chat.id, 'Команды администратора бота', reply_markup=markup)
+            last_user_message[message.chat.id] = show_admin_menu.message_id
     except Exception as e:
         print(e)
 
@@ -272,7 +252,9 @@ def new_post(message):
     try:
         p = Accounts.objects.get(tgid=message.chat.id)
         if p.has_access:
+            delete_prev_message(message)
             new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip, reply_markup=send_to_moderate)
+            last_user_message[message.chat.id] = new_post_tooltip.message_id
             p.get_content = True
             p.save()
     except Exception as e:
@@ -436,19 +418,22 @@ def callback_query(call):
         if m.type == 'text':
             if not bot_settings.pre_moder:
                 for admin in bot_admins:
-                    post_text_admins = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+                    post_text_admins = f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
                     bot.send_message(admin.tgid,
                                      post_text_admins,
                                      reply_markup=markup,
                                      parse_mode='HTML')
-                post_text_channel = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a>\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+                if m.anonym:
+                    post_text_channel = f'{m.data}'
+                else:
+                    post_text_channel = f'{m.user.tgname} {"@"+m.user.tglogin if m.user.tglogin else ""}\nТекст: {m.data}'
                 post_to_channel = bot.send_message(test_channel_id, post_text_channel, parse_mode='HTML')
                 #   Сохраняем Message_id поста в канале
                 m.channel_message_id = post_to_channel.message_id
                 m.save()
             else:
                 for admin in bot_admins:
-                    post_text = f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
+                    post_text = f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}'
                     bot.send_message(admin.tgid,
                                      post_text,
                                      reply_markup=markup,
@@ -461,7 +446,12 @@ def callback_query(call):
                                   question=m.question,
                                   options=poll_options,
                                   allows_multiple_answers=m.allows_multiple_answers_poll)
-                question_text = f'{m.question}\n{"Автор: " + m.user.clubname if not m.anonym else ""}'
+                    bot.send_message(admin.tgid,
+                                     f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nОтправлен опрос\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     reply_markup=markup,
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
+                question_text = f'{m.question}\n{"Автор: " + m.user.tgname if not m.anonym else ""}'
                 post_to_channel = bot.send_poll(test_channel_id,
                                                 question=question_text,
                                                 options=poll_options,
@@ -476,7 +466,7 @@ def callback_query(call):
                                   options=poll_options,
                                   allows_multiple_answers=m.allows_multiple_answers_poll)
                     bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nОтправлен опрос\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nОтправлен опрос\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                      reply_markup=markup,
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
@@ -496,7 +486,7 @@ def callback_query(call):
                                              enumerate(media_list)])
 
                     bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                      reply_markup=markup,
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
@@ -511,7 +501,7 @@ def callback_query(call):
                                                              parse_mode='HTML') for index, item in
                                              enumerate(media_list)])
                     bot.send_message(admin.tgid,
-                                     f'©️{m.user.clubname} <a href="https://vas3k.club/user/{m.user.clublogin}">{m.user.clublogin}</a> — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
+                                     f'©️{m.user.tgname} {m.user.tglogin if m.user.tglogin else ""} — {m.user.tgid}\nТекст: {m.data}\nАнонимно: {"Да" if m.anonym else "Нет"}',
                                      parse_mode='HTML',
                                      reply_markup=markup,
                                      disable_web_page_preview=True)
@@ -546,7 +536,7 @@ def callback_query(call):
             if m.type == 'text':
                 post_text = (
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
-                        m.data, m.user.clubname, m.user.clublogin, m.user.clublogin, ))
+                        m.data, m.user.tglogin, m.user.tgname))
                 bot.send_message(test_channel_id, post_text, parse_mode='HTML')
             elif m.type == 'poll':
                 question_text = f'{m.question}\n{"Автор: " + m.user.clubname if not m.anonym else ""}'
@@ -562,7 +552,7 @@ def callback_query(call):
                 media_list = [item.strip() for item in media_list.split(",")]
                 caption = (
                     config.anonym_text_post.format(m.data) if anonym == 'True' else config.public_text_post.format(
-                        m.data, m.user.clubname, m.user.clublogin, m.user.clublogin))
+                        m.data, m.user.tglogin, m.user.tgname))
                 post_to_channel = bot.send_media_group(test_channel_id, [
                     InputMediaPhoto(media=item, caption=caption if index == 0 else None, parse_mode='HTML') for
                     index, item in
@@ -746,9 +736,15 @@ def block_user_func(message):
                 if not user.banned:
                     user.banned = True
                     user.save()
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} был заблокирован!')
+                    delete_prev_message(message)
+                    succ_user_block = bot.send_message(message.chat.id, f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} был заблокирован!')
+                    last_user_message[message.chat.id] = succ_user_block.message_id
                 else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} был заблокирован ранее!')
+                    delete_prev_message(message)
+                    already_user_blocked = bot.send_message(
+                        message.chat.id,
+                        f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} уже находится в блок-листе')
+                    last_user_message[message.chat.id] = already_user_blocked.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
 
@@ -762,9 +758,13 @@ def unlock_user_func(message):
                 if user.banned:
                     user.banned = False
                     user.save()
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid}был разблокирован!')
+                    delete_prev_message(message)
+                    unlock_user_msg = bot.send_message(message.chat.id, f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} разблокирован!')
+                    last_user_message[message.chat.id] = unlock_user_msg.message_id
                 else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} был разблокирован ранее!')
+                    delete_prev_message(message)
+                    already_unblocked = bot.send_message(message.chat.id, f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} не находится в блок-листе!')
+                    last_user_message[message.chat.id] = already_unblocked.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
 
@@ -778,29 +778,37 @@ def add_admin_func(message):
                 if not user.is_admin:
                     user.is_admin = True
                     user.save()
-                    bot.send_message(
+                    delete_prev_message(message)
+                    add_admin_msg = bot.send_message(
                         message.chat.id,
-                        f'✅ Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} теперь администратор бота')
+                        f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} теперь администратор бота')
+                    last_user_message[message.chat.id] = add_admin_msg.message_id
                 else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является админом бота!')
+                    delete_prev_message(message)
+                    already_bot_admin = bot.send_message(message.chat.id, f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} уже является админом бота!')
+                    last_user_message[message.chat.id] = already_bot_admin.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
 
 
-def add_admin_func(message):
+def add_super_admin_func(message):
     user_input = message.text
     try:
         all_users = Accounts.objects.all()
         for user in all_users:
             if str(user_input) in [str(user.tgid), str(user.tglogin)]:
-                if not user.is_admin:
-                    user.is_admin = True
+                if not user.superadmin:
+                    user.superadmin = True
                     user.save()
-                    bot.send_message(
+                    delete_prev_message(message)
+                    add_superadmin_msg = bot.send_message(
                         message.chat.id,
-                        f'✅ Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} теперь супер админ бота')
+                        f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} теперь супер админ бота')
+                    last_user_message[message.chat.id] = add_superadmin_msg.message_id
                 else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является супер админом бота!')
+                    delete_prev_message(message)
+                    already_superadmin_msg = bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является супер админом бота!')
+                    last_user_message[message.chat.id] = already_superadmin_msg.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
 
@@ -894,7 +902,7 @@ def text_message(message):
                                                  InputMediaVideo(media=item, caption=caption if index == 0 else None)
                                                  for index, item in enumerate(media_list)])
                         bot.send_message(admin.tgid,
-                                         f'©️{post.user.clubname} <a href="https://vas3k.club/user/{post.user.clublogin}">{post.user.clublogin}</a> — {post.user.tgid}\nТекст: {post.data}\nАнонимно: {"Да" if post.anonym else "Нет"}',
+                                         f'©️{post.user.tgname} {post.user.tglogin if post.user.tglogin else ""} — {post.user.tgid}\nТекст: {post.data}\nАнонимно: {"Да" if post.anonym else "Нет"}',
                                          reply_markup=markup,
                                          parse_mode='HTML',
                                          disable_web_page_preview=True)

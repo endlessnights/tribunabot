@@ -38,7 +38,7 @@ forbidden_types = '''
 
 public_text_post = '''
 {}
-©️{} (<a href="https://vas3k.club/user/{}">{}</a>)
+©️<a href="https://t.me/{}">{}</a>
 '''
 anonym_text_post = '''
 {}
