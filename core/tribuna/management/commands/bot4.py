@@ -7,6 +7,10 @@ from django.utils import timezone
 from telebot import TeleBot, types
 from requests.exceptions import Timeout
 from telebot.types import InputMediaPhoto, InputMediaVideo
+import threading
+import time
+
+user_photos_lock = threading.Lock()
 
 from . import config
 from ...models import Accounts, UserMessage, BotSettings
@@ -182,7 +186,6 @@ def start_bot(message):
 def admin_bot(message):
     try:
         bot_settings = BotSettings.objects.first()
-        super_admins = Accounts.objects.filter(superadmin=True)
         if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
             markup = types.InlineKeyboardMarkup(row_width=1)
             block_user = types.InlineKeyboardButton(
@@ -200,10 +203,6 @@ def admin_bot(message):
             add_admin = types.InlineKeyboardButton(
                 text='Добавить админа',
                 callback_data=f"admin_actions,action=add_admin"
-            )
-            add_super_admin = types.InlineKeyboardButton(
-                text='Добавить суперадмина',
-                callback_data=f"admin_actions,action=add_super_admin"
             )
             admin_list = types.InlineKeyboardButton(
                 text='Список админов',
@@ -225,10 +224,7 @@ def admin_bot(message):
                 text=anonym_switch_text,
                 callback_data=f"admin_actions,action=anonym_func"
             )
-            if str(message.chat.id) in str(super_admins):
-                markup.add(block_user, unlock_user, banned_list, add_admin, add_super_admin, admin_list, pre_moder_switch, anonym_switch)
-            else:
-                markup.add(block_user, unlock_user, banned_list)
+            markup.add(block_user, unlock_user, banned_list, add_admin, admin_list, pre_moder_switch, anonym_switch)
             bot.send_message(message.chat.id, 'Команды администратора бота', reply_markup=markup)
     except Exception as e:
         print(e)
@@ -309,11 +305,10 @@ def photo_message(message):
                 'caption': caption
             })
             # If the user has sent 10 photos, disable further photo sending
-            if user_photos[message.chat.id]['count'] > 10:
+            time.sleep(2)
+            if user_photos[message.chat.id]['count'] >= 10:
                 p.get_content = False
                 p.save()
-                bot.send_message(message.chat.id,
-                                 config.photo_limit)
                 # Create a UserMessage record with the available photos
                 create_photo_message_record(p, user_photos[message.chat.id]['photos'], caption)
                 user_photos.pop(message.chat.id)
@@ -324,6 +319,7 @@ def photo_message(message):
 # create_user_message_record
 def create_photo_message_record(p, photos, caption):
     first_photo_info = photos[0]
+    print(first_photo_info)
     UserMessage(
         user=p,
         message_id=first_photo_info['message_id'],
@@ -379,7 +375,6 @@ def create_video_message_record(p, videos, caption):
 def callback_query(call):
     bot_settings = BotSettings.objects.first()
     bot_admins = Accounts.objects.filter(is_admin=True)
-    super_admins = Accounts.objects.filter(superadmin=True)
     if str(call.data).startswith('send_post'):
         callback_data = call.data.split(',')
         post_author = int(callback_data[1])
@@ -667,7 +662,6 @@ def callback_query(call):
                     text=f'{user_item.clubname + " " + user_item.clublogin if user_item.clubname else user_item.tglogin if user_item.tglogin else user_item.tgname, user_item.tgid}',
                     reply_markup=markup
                 )
-            bot.answer_callback_query(call.id)
 
             # bot.register_next_step_handler(block_user_msg, block_user_func)
         if action == 'add_admin':
@@ -711,11 +705,6 @@ def callback_query(call):
                 bot_settings.anonym_func = True
                 bot.answer_callback_query(call.id, 'Анонимность включена!')
                 bot_settings.save()
-        if action == 'add_super_admin':
-            add_super_admin_msg = bot.send_message(
-                call.message.chat.id,
-                'Отправьте юзернейм пользователя или его уникальный идентификатор')
-            bot.register_next_step_handler(add_super_admin_msg, add_super_admin_func)
     if str(call.data).startswith('admin_rem'):
         callback_data = call.data.split(',')
         admin_id = str(callback_data[1])
@@ -738,71 +727,45 @@ def callback_query(call):
 
 
 def block_user_func(message):
-    user_input = message.text
+    user_id = message.text
     try:
-        all_users = Accounts.objects.all()
-        for user in all_users:
-            if str(user_input) in [str(user.tgid), str(user.tglogin)]:
-                if not user.banned:
-                    user.banned = True
-                    user.save()
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} был заблокирован!')
-                else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} был заблокирован ранее!')
+        p = Accounts.objects.get(tgid=user_id)
+        if not p.banned:
+            p.banned = True
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был заблокирован!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был заблокирован ранее!')
     except Exception as e:
-        bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
 
 
 def unlock_user_func(message):
-    user_input = message.text
+    user_id = message.text
     try:
-        all_users = Accounts.objects.all()
-        for user in all_users:
-            if str(user_input) in [str(user.tgid), str(user.tglogin)]:
-                if user.banned:
-                    user.banned = False
-                    user.save()
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid}был разблокирован!')
-                else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} был разблокирован ранее!')
+        p = Accounts.objects.get(tgid=user_id)
+        if p.banned:
+            p.banned = False
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был разблокирован!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} не был заблокирован ранее!')
     except Exception as e:
-        bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
 
 
 def add_admin_func(message):
-    user_input = message.text
+    user_id = message.text
     try:
-        all_users = Accounts.objects.all()
-        for user in all_users:
-            if str(user_input) in [str(user.tgid), str(user.tglogin)]:
-                if not user.is_admin:
-                    user.is_admin = True
-                    user.save()
-                    bot.send_message(
-                        message.chat.id,
-                        f'✅ Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} теперь администратор бота')
-                else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является админом бота!')
+        p = Accounts.objects.get(tgid=user_id)
+        if not p.is_admin:
+            p.is_admin = True
+            p.save()
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} был назначен админом бота!')
+        else:
+            bot.send_message(message.chat.id, f'Пользователь {p.tgid} уже является админом бота!')
     except Exception as e:
-        bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
-
-
-def add_admin_func(message):
-    user_input = message.text
-    try:
-        all_users = Accounts.objects.all()
-        for user in all_users:
-            if str(user_input) in [str(user.tgid), str(user.tglogin)]:
-                if not user.is_admin:
-                    user.is_admin = True
-                    user.save()
-                    bot.send_message(
-                        message.chat.id,
-                        f'✅ Пользователь {user.tgname} {user.tglogin if user.tglogin else ""} — {user.tgid} теперь супер админ бота')
-                else:
-                    bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является супер админом бота!')
-    except Exception as e:
-        bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
+        bot.send_message(message.chat.id, f'Неверный формат ввода!\nОшибка: {e}')
 
 
 # Define a dictionary to store user photo information

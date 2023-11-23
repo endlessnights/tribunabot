@@ -19,6 +19,7 @@ class Accounts(models.Model):
     clubname = models.CharField(verbose_name='Vas3k name', max_length=200, blank=True, null=True)
     post_limit = models.PositiveIntegerField(verbose_name='Ограничения на постинг', blank=True, null=True, default=3)
     is_admin = models.BooleanField(verbose_name='Bot admin', default=False)
+    superadmin = models.BooleanField(verbose_name='Super admin', default=False)
     has_access = models.BooleanField(verbose_name='Has access', default=False)
     banned = models.BooleanField(default=False)
     get_content = models.BooleanField(default=False)

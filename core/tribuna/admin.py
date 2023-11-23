@@ -8,6 +8,7 @@ class ProfilesAdmin(admin.ModelAdmin):
     list_display = [
         'tgid',
         'clublogin',
+        'banned',
         'clubname',
         'lastdate',
         'regdate',
