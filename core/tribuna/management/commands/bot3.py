@@ -245,20 +245,23 @@ def send_posts_markup(message, first_msg_id, type):
 
 @bot.message_handler(commands=['new'])
 def new_post(message):
-    p = Accounts.objects.get(tgid=message.chat.id)
-    send_to_moderate = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-    send_to_moderate_btn = types.KeyboardButton(text=config.send_to_moderate)
-    send_to_moderate.add(send_to_moderate_btn)
     try:
         p = Accounts.objects.get(tgid=message.chat.id)
-        if p.has_access:
-            delete_prev_message(message)
-            new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip, reply_markup=send_to_moderate)
-            last_user_message[message.chat.id] = new_post_tooltip.message_id
-            p.get_content = True
-            p.save()
+        send_to_moderate = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        send_to_moderate_btn = types.KeyboardButton(text=config.send_to_moderate)
+        send_to_moderate.add(send_to_moderate_btn)
+        try:
+            p = Accounts.objects.get(tgid=message.chat.id)
+            if p.has_access:
+                delete_prev_message(message)
+                new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip, reply_markup=send_to_moderate)
+                last_user_message[message.chat.id] = new_post_tooltip.message_id
+                p.get_content = True
+                p.save()
+        except Exception as e:
+            bot.send_message(message.chat.id, 'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
+            print(e)
     except Exception as e:
-        bot.send_message(message.chat.id, 'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
         print(e)
 
 
