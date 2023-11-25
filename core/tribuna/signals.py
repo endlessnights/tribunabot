@@ -30,3 +30,4 @@ def create_init_bot_settings(sender, **kwargs):
                 anonym_func=False,
                 pre_moder=False,
             )
+            default_settings.save()

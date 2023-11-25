@@ -12,17 +12,18 @@ from . import config
 from ...models import Accounts, UserMessage, BotSettings
 
 try:
-    production = os.environ['PROD_OUTLINE_BOT']
+    production = os.environ['PROD_TRIBUNA_BOT']
 except KeyError:
-    print('NO PROD_OUTLINE_BOT')
+    print('NO PROD_TRIBUNA_BOT')
 try:
-    tg_token = os.environ['TELEGRAM_BOT_SECRET_OUTLINE_BOT']
+    tg_token = os.environ['TELEGRAM_BOT_SECRET_TRIBUNA']
 except KeyError:
-    print('NO TELEGRAM_BOT_SECRET_OUTLINE_BOT')
+    print('NO TELEGRAM_BOT_SECRET_TRIBUNA')
 try:
     club_service_token_os = os.environ['CLUB_SERVICE_TOKEN_OUTLINE_BOT']
 except KeyError:
     print('NO CLUB_SERVICE_TOKEN_OUTLINE_BOT')
+    club_service_token_os = os.environ['CLUB_SERVICE_TOKEN_OUTLINE_BOT']
 
 bot = TeleBot(tg_token, threaded=True, num_threads=32)
 # bot = TeleBot(tg_token, threaded=False)
