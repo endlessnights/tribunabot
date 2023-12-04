@@ -157,6 +157,19 @@ def start_bot(message):
         print(e)
 
 
+@bot.message_handler(commands=['help'])
+def help_bot(message):
+    if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
+        bot.send_message(message.chat.id, config.bot_help_admin)
+    else:
+        bot.send_message(message.chat.id, config.bot_help)
+
+
+@bot.message_handler(commands=['about'])
+def about_bot(message):
+    bot.send_message(message.chat.id, config.about_bot)
+
+
 @bot.message_handler(commands=['admin'])
 def admin_bot(message):
     try:
@@ -863,7 +876,7 @@ def poll_message(message):
                           question=m.question,
                           options=poll_options,
                           allows_multiple_answers=m.allows_multiple_answers_poll)
-            bot.send_message(message.chat.id, f'Это превью поста', reply_markup=markup)
+            bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале:', reply_markup=markup)
 
 
 @bot.message_handler(content_types=['text'])
@@ -969,7 +982,7 @@ def manage_photo_post(message, photos, non_empty_caption, p):
                              [InputMediaPhoto(media=item, caption=caption if index == 0 else None,
                                               parse_mode='HTML')
                               for index, item in enumerate(media_list)])
-        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
+        bot.send_message(message.chat.id, 'Так будет выглядеть ваше сообщение в канале:', reply_markup=markup)
     user_photos.pop(message.chat.id)
     p.get_content = False
     p.save()
@@ -1023,7 +1036,7 @@ def manage_video_post(message, videos, non_empty_caption, p):
                              [InputMediaVideo(media=item, caption=caption if index == 0 else None,
                                               parse_mode='HTML')
                               for index, item in enumerate(media_list)])
-        bot.send_message(message.chat.id, 'Это превью поста', reply_markup=markup)
+        bot.send_message(message.chat.id, 'Так будет выглядеть ваше сообщение в канале:', reply_markup=markup)
     user_videos.pop(message.chat.id)
     p.get_content = False
     p.save()
@@ -1064,7 +1077,7 @@ def publish_text_func(message, p):
             callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
         )
         markup.add(send_post)
-        bot.send_message(message.chat.id, f'Это превью поста:\n\n{m.data}', reply_markup=markup)
+        bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале::\n\n{m.data}', reply_markup=markup)
 
 
 def find_non_empty_caption(photos):
