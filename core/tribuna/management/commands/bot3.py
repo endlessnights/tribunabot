@@ -1086,7 +1086,10 @@ def publish_text_func(message, p):
 def find_non_empty_caption(photos):
     for photo_info in photos:
         if photo_info['caption']:
-            return photo_info['caption']
+            if not len(photo_info['caption']) > 560:
+                return photo_info['caption']
+            else:
+                return None
     return None
 
 
