@@ -1058,26 +1058,29 @@ def publish_text_func(message, p):
     remove_reply_markup = types.ReplyKeyboardRemove()
     p.get_content = False
     p.save()
-    UserMessage(
-        user=p,
-        data=message.text,
-        message_id=message.id,
-        type='text',
-    ).save()
-    m = UserMessage.objects.get(message_id=message.id)
-    if bot_settings.anonym_func:
-        visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
-                                              reply_markup=send_posts_markup(message, message.id, type='text'))
-        bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
-        last_user_message[message.chat.id] = visibility_buttons.message_id
+    if len(message.text) > 560:
+        bot.send_message(message.chat.id, config.forbidden_types)
     else:
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        send_post = types.InlineKeyboardButton(
-            text='Запостить',
-            callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
-        )
-        markup.add(send_post)
-        bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале::\n\n{m.data}', reply_markup=markup)
+        UserMessage(
+            user=p,
+            data=message.text,
+            message_id=message.id,
+            type='text',
+        ).save()
+        m = UserMessage.objects.get(message_id=message.id)
+        if bot_settings.anonym_func:
+            visibility_buttons = bot.send_message(message.chat.id, 'Выберите формат поста',
+                                                  reply_markup=send_posts_markup(message, message.id, type='text'))
+            bot.send_message(message.chat.id, ':)', reply_markup=remove_reply_markup)
+            last_user_message[message.chat.id] = visibility_buttons.message_id
+        else:
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            send_post = types.InlineKeyboardButton(
+                text='Запостить',
+                callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
+            )
+            markup.add(send_post)
+            bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале::\n\n{m.data}', reply_markup=markup)
 
 
 def find_non_empty_caption(photos):
