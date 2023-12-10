@@ -46,7 +46,7 @@ class UserMessage(models.Model):
         ('poll', 'Poll'),
     ]
     type = models.CharField(max_length=6, choices=type_choices, default='text')
-    data = models.CharField(max_length=560, blank=True, null=True)
+    data = models.CharField(max_length=561, blank=True, null=True)
     file_ids = models.CharField(max_length=2000, blank=True, null=True)
     anonym = models.BooleanField(default=False)
     sent = models.BooleanField(default=False)

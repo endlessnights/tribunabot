@@ -11,7 +11,14 @@ from telebot.types import InputMediaPhoto, InputMediaVideo
 from . import config
 from ...models import Accounts, UserMessage, BotSettings
 
+#   bot_settings.pre_moder - включает премодерацию постов
+#   bot_settings.anonym - включает возможность анонимной отправки
+
+
+#   Получаем значение из переменных окружения
+#   Так как запускаем в докере, то из docker-compose.yml
 try:
+    #   Принимает True или False - влияет на режим запуска бота
     production = os.environ['PROD_TRIBUNA_BOT']
 except KeyError:
     print('NO PROD_TRIBUNA_BOT')
@@ -20,6 +27,7 @@ try:
 except KeyError:
     print('NO TELEGRAM_BOT_SECRET_TRIBUNA')
 try:
+    #   Токен для авторизации в клубном API
     club_service_token_os = os.environ['CLUB_SERVICE_TOKEN_OUTLINE_BOT']
 except KeyError:
     print('NO CLUB_SERVICE_TOKEN_OUTLINE_BOT')
@@ -28,8 +36,10 @@ except KeyError:
 bot = TeleBot(tg_token, threaded=True, num_threads=32)
 # bot = TeleBot(tg_token, threaded=False)
 club_service_token = club_service_token_os
-bot_admin = 326070831
+# bot_admin = 326070831   #   dev-переменная, не используется
+#   ID канала, где работает бот с правами админа
 test_channel_id = '-1002139696426'
+#   хедеры для работы с API клуба
 headers = {
     'X-Service-Token': '{}'.format(club_service_token),
     'X-Requested-With': 'XMLHttpRequest'
@@ -41,12 +51,15 @@ bot_admins = Accounts.objects.filter(is_admin=True)
 bot_settings = BotSettings.objects.first()
 
 
+#   Функция для хранения message.id и при последующем вызове удаления его из бота, по факту - удаление пред. сообщений
 def delete_prev_message(message):
     if message.chat.id in last_user_message:
         bot.delete_message(message.chat.id, last_user_message[message.chat.id])
     bot.delete_message(message.chat.id, message.message_id)
 
 
+#   Функция не используется, так как отказались от авторизации через клубного бота и по паролю
+#   Любой может пользоваться ботом
 def get_user_password_input(message):
     read_pass_from_user = message.text
     p = Accounts.objects.get(tgid=message.chat.id)
@@ -79,6 +92,7 @@ def get_user_password_input(message):
         print(f'get_user_password_input: {e}')
 
 
+#   Получаем данные по профилю пользователя, если они есть
 def get_club_profile(telegram_id):
     try:
         club_profile = requests.get(url='https://vas3k.club/user/by_telegram_id/{}.json'.format(telegram_id),
@@ -96,6 +110,7 @@ def get_club_profile(telegram_id):
         return None
 
 
+#   Показываем Reply клавиатуру для админов
 def show_keyboard_buttons(message):
     if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
         keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
@@ -170,6 +185,7 @@ def about_bot(message):
     bot.send_message(message.chat.id, config.about_bot)
 
 
+#   Показываем Inline кнопки для админов и суперадминов
 @bot.message_handler(commands=['admin'])
 def admin_bot(message):
     try:
@@ -218,7 +234,8 @@ def admin_bot(message):
                 callback_data=f"admin_actions,action=anonym_func"
             )
             if str(message.chat.id) in str(super_admins):
-                markup.add(block_user, unlock_user, banned_list, add_admin, add_super_admin, admin_list, pre_moder_switch, anonym_switch)
+                markup.add(block_user, unlock_user, banned_list, add_admin, add_super_admin, admin_list,
+                           pre_moder_switch, anonym_switch)
             else:
                 markup.add(block_user, unlock_user, banned_list)
             delete_prev_message(message)
@@ -228,6 +245,7 @@ def admin_bot(message):
         print(e)
 
 
+#   Функция вызывается, если включена возможность отправки анонимных постов
 def send_posts_markup(message, first_msg_id, type):
     if not type == 'poll':
         m = UserMessage.objects.get(message_id=first_msg_id)
@@ -268,17 +286,20 @@ def new_post(message):
             p = Accounts.objects.get(tgid=message.chat.id)
             if p.has_access:
                 delete_prev_message(message)
-                new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip, reply_markup=send_to_moderate)
+                new_post_tooltip = bot.send_message(message.chat.id, config.new_post_tooltip,
+                                                    reply_markup=send_to_moderate)
                 last_user_message[message.chat.id] = new_post_tooltip.message_id
                 p.get_content = True
                 p.save()
         except Exception as e:
-            bot.send_message(message.chat.id, 'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
+            bot.send_message(message.chat.id,
+                             'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
             print(e)
     except Exception as e:
         print(e)
 
 
+#   Аналог Reply кнопки Запостить, для тех, у кого не отображаются Reply кнопки; Евгений сообщил, что на IPAD их нет
 @bot.message_handler(commands=['publish'])
 def publish_it_action_btn(message):
     p = Accounts.objects.get(tgid=message.chat.id)
@@ -290,6 +311,7 @@ def publish_it_action_btn(message):
         publish_text_func(message, p)
 
 
+#   Хендлер для отправки фото. Часть комментов на англ - спасибо ChatGPT
 @bot.message_handler(content_types=['photo'])
 def photo_message(message):
     try:
@@ -321,7 +343,9 @@ def photo_message(message):
 
 
 # create_user_message_record
+#   Создаем 1 запись для фото/видео до 10 файлов
 def create_photo_message_record(p, photos, caption):
+    #   В message_id записываем message_id первого сообщения из стопки
     first_photo_info = photos[0]
     UserMessage(
         user=p,
@@ -332,6 +356,7 @@ def create_photo_message_record(p, photos, caption):
     ).save()
 
 
+#   Полагаю, что photo и video хендлеры можно превратить в одну функцию
 @bot.message_handler(content_types=['video'])
 def video_message(message):
     try:
@@ -363,8 +388,10 @@ def video_message(message):
 
 
 # create_user_message_record
+#   Создаем 1 запись для фото/видео до 10 файлов
 def create_video_message_record(p, videos, caption):
     first_video_info = videos[0]
+    #   В message_id записываем message_id первого сообщения из стопки
     UserMessage(
         user=p,
         message_id=first_video_info['message_id'],
@@ -374,6 +401,7 @@ def create_video_message_record(p, videos, caption):
     ).save()
 
 
+#   Обработчик всех callback_query
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     bot_settings = BotSettings.objects.first()
@@ -384,17 +412,21 @@ def callback_query(call):
         post_author = int(callback_data[1])
         message_id = int(callback_data[2])
         anonym = callback_data[3].split('=')[1]
+        #
         try:
             m = UserMessage.objects.get(message_id=message_id)
         except Exception as e:
-            m = UserMessage.objects.get(poll_id=message_id)
+            if UserMessage.objects.filter(poll_id=message_id).exists():
+                m = UserMessage.objects.get(poll_id=message_id)
+            else:
+                print(e)
         if anonym == 'True':
             m.anonym = True
             m.save()
         if anonym == 'False':
             m.anonym = False
             m.save()
-        #   Если отключена возможность отправки анонимный постов в настройках, то все посты будут публичные
+        #   Если отключена возможность отправки анонимных постов в настройках, то все посты будут публичные
         if not bot_settings.anonym_func:
             m.anonym = False
             m.save()
@@ -432,6 +464,7 @@ def callback_query(call):
                 callback_data=f"post_accept_action,{m.message_id if m.type != 'poll' else m.poll_id},{anonym},accept=Block"
             )
             markup.add(cancel_post, warn_delete_post, block_user)
+        #   Тип поста - простой текст
         if m.type == 'text':
             if not bot_settings.pre_moder:
                 for admin in bot_admins:
@@ -443,7 +476,7 @@ def callback_query(call):
                 if m.anonym:
                     post_text_channel = f'{m.data}'
                 else:
-                    post_text_channel = f'{m.user.tgname} {"@"+m.user.tglogin if m.user.tglogin else ""}\nТекст: {m.data}'
+                    post_text_channel = f'{m.data}\n\n©️{m.user.tgname} {"@" + m.user.tglogin if m.user.tglogin else ""}'
                 post_to_channel = bot.send_message(test_channel_id, post_text_channel, parse_mode='HTML')
                 #   Сохраняем Message_id поста в канале
                 m.channel_message_id = post_to_channel.message_id
@@ -455,6 +488,7 @@ def callback_query(call):
                                      post_text,
                                      reply_markup=markup,
                                      parse_mode='HTML')
+        #   Тип поста - опрос
         elif m.type == 'poll':
             if not bot_settings.pre_moder:
                 poll_options = json.loads(m.options)
@@ -487,10 +521,11 @@ def callback_query(call):
                                      reply_markup=markup,
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
+        #   Тип поста фото/видео/стопка
         elif m.type == 'photo' or 'video':
             media_list = str(m.file_ids)
             media_list = [item.strip() for item in media_list.split(",")]
-            caption = f'{m.data}'
+            caption = f'{m.data}\n\n©️{m.user.tgname} {"@" + m.user.tglogin if m.user.tglogin else ""}'
             #   Если включена премодерация
             if bot_settings.pre_moder:
                 for admin in bot_admins:
@@ -698,7 +733,7 @@ def callback_query(call):
                                  reply_markup=markup)
         if action == 'unlock_user_inline':
             unlock_user_msg = bot.send_message(call.message.chat.id,
-                                             'Отправьте юзернейм пользователя или его уникальный идентификатор')
+                                               'Отправьте юзернейм пользователя или его уникальный идентификатор')
             bot.register_next_step_handler(unlock_user_msg, unlock_user_func)
         if action == 'pre_moder':
             if bot_settings.pre_moder:
@@ -754,13 +789,14 @@ def block_user_func(message):
                     user.banned = True
                     user.save()
                     delete_prev_message(message)
-                    succ_user_block = bot.send_message(message.chat.id, f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} был заблокирован!')
+                    succ_user_block = bot.send_message(message.chat.id,
+                                                       f'✅ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} был заблокирован!')
                     last_user_message[message.chat.id] = succ_user_block.message_id
                 else:
                     delete_prev_message(message)
                     already_user_blocked = bot.send_message(
                         message.chat.id,
-                        f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} уже находится в блок-листе')
+                        f'❌ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} уже находится в блок-листе')
                     last_user_message[message.chat.id] = already_user_blocked.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
@@ -776,11 +812,13 @@ def unlock_user_func(message):
                     user.banned = False
                     user.save()
                     delete_prev_message(message)
-                    unlock_user_msg = bot.send_message(message.chat.id, f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} разблокирован!')
+                    unlock_user_msg = bot.send_message(message.chat.id,
+                                                       f'✅ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} разблокирован!')
                     last_user_message[message.chat.id] = unlock_user_msg.message_id
                 else:
                     delete_prev_message(message)
-                    already_unblocked = bot.send_message(message.chat.id, f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} не находится в блок-листе!')
+                    already_unblocked = bot.send_message(message.chat.id,
+                                                         f'❌ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} не находится в блок-листе!')
                     last_user_message[message.chat.id] = already_unblocked.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
@@ -798,11 +836,12 @@ def add_admin_func(message):
                     delete_prev_message(message)
                     add_admin_msg = bot.send_message(
                         message.chat.id,
-                        f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} теперь администратор бота')
+                        f'✅ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} теперь администратор бота')
                     last_user_message[message.chat.id] = add_admin_msg.message_id
                 else:
                     delete_prev_message(message)
-                    already_bot_admin = bot.send_message(message.chat.id, f'❌ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} уже является админом бота!')
+                    already_bot_admin = bot.send_message(message.chat.id,
+                                                         f'❌ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} уже является админом бота!')
                     last_user_message[message.chat.id] = already_bot_admin.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
@@ -820,11 +859,12 @@ def add_super_admin_func(message):
                     delete_prev_message(message)
                     add_superadmin_msg = bot.send_message(
                         message.chat.id,
-                        f'✅ Пользователь {user.tgname} {"@"+user.tglogin if user.tglogin else ""} — {user.tgid} теперь супер админ бота')
+                        f'✅ Пользователь {user.tgname} {"@" + user.tglogin if user.tglogin else ""} — {user.tgid} теперь супер админ бота')
                     last_user_message[message.chat.id] = add_superadmin_msg.message_id
                 else:
                     delete_prev_message(message)
-                    already_superadmin_msg = bot.send_message(message.chat.id, f'Пользователь {user.tgid} уже является супер админом бота!')
+                    already_superadmin_msg = bot.send_message(message.chat.id,
+                                                              f'Пользователь {user.tgid} уже является супер админом бота!')
                     last_user_message[message.chat.id] = already_superadmin_msg.message_id
     except Exception as e:
         bot.send_message(message.chat.id, f'{config.admin_wrong_cmd}\nОшибка: {e}')
@@ -835,12 +875,16 @@ user_photos = {}
 user_videos = {}
 
 
+#   Неиспользуемые типы сообщений
 @bot.message_handler(content_types=['document', 'audio', 'sticker', 'voice', 'video_note', 'contact', 'location'])
 def forbidden_content(message):
     bot.send_message(message.chat.id, config.forbidden_types)
-    p = Accounts.objects.get(tgid=message.chat.id)
-    p.get_content = False
-    p.save()
+    try:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        p.get_content = False
+        p.save()
+    except Exception as e:
+        print(f'forbidden_content: {e}')
 
 
 @bot.message_handler(content_types=['poll'])
@@ -1058,6 +1102,7 @@ def publish_text_func(message, p):
     remove_reply_markup = types.ReplyKeyboardRemove()
     p.get_content = False
     p.save()
+    #   Ограничение на ввод сообщений более 560 символов
     if len(message.text) > 560:
         bot.send_message(message.chat.id, config.forbidden_types)
     else:
@@ -1080,12 +1125,14 @@ def publish_text_func(message, p):
                 callback_data=f"send_post,{message.chat.id},{m.message_id},anonym=False"
             )
             markup.add(send_post)
-            bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале::\n\n{m.data}', reply_markup=markup)
+            bot.send_message(message.chat.id, f'Так будет выглядеть ваше сообщение в канале::\n\n{m.data}',
+                             reply_markup=markup)
 
 
 def find_non_empty_caption(photos):
     for photo_info in photos:
         if photo_info['caption']:
+            #   Ограничение на ввод caption более 560 символов
             if not len(photo_info['caption']) > 560:
                 return photo_info['caption']
             else:
