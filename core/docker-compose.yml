@@ -6,7 +6,6 @@ services:
       - '8005:8000'
     container_name: tribuna_bot_django
     environment:
-      - SECRET_KEY_OUTLINE_BOT=${SECRET_KEY_OUTLINE_BOT}
       - PROD_TRIBUNA_BOT=True
       - TELEGRAM_BOT_SECRET_TRIBUNA=${TELEGRAM_BOT_SECRET_TRIBUNA}
       - CLUB_SERVICE_TOKEN_OUTLINE_BOT=${CLUB_SERVICE_TOKEN_OUTLINE_BOT}
