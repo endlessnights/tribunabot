@@ -3,4 +3,4 @@
 python manage.py makemigrations tribuna
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000 &
-python manage.py bot3
+python manage.py bot

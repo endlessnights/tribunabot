@@ -9,8 +9,8 @@ from telebot import TeleBot, types
 from requests.exceptions import Timeout
 from telebot.types import CallbackQuery, InputMediaPhoto, InputMediaVideo
 
-from . import config
-from ...models import Accounts, UserMessage
+from core.tribuna.management.commands import config
+from core.tribuna.models import Accounts, UserMessage
 
 try:
     production = os.environ['PROD_OUTLINE_BOT']

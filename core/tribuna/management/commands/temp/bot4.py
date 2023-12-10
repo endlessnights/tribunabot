@@ -10,8 +10,8 @@ from telebot.types import InputMediaPhoto, InputMediaVideo
 import threading
 import time
 
-from . import config
-from ...models import Accounts, UserMessage, BotSettings
+from core.tribuna.management.commands import config
+from core.tribuna.models import Accounts, UserMessage, BotSettings
 
 try:
     production = os.environ['PROD_TRIBUNA_BOT']
