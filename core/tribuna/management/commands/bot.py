@@ -176,6 +176,12 @@ def start_bot(message):
 
 @bot.message_handler(commands=['help'])
 def help_bot(message):
+    try:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        p.get_content = False
+        p.save()
+    except Exception as e:
+        print(f'about_bot - no user in db: {e}')
     if Accounts.objects.filter(tgid=message.chat.id, is_admin=True).exists():
         bot.send_message(message.chat.id, config.bot_help_admin)
     else:
@@ -184,6 +190,12 @@ def help_bot(message):
 
 @bot.message_handler(commands=['about'])
 def about_bot(message):
+    try:
+        p = Accounts.objects.get(tgid=message.chat.id)
+        p.get_content = False
+        p.save()
+    except Exception as e:
+        print(f'about_bot - no user in db: {e}')
     bot.send_message(message.chat.id, config.about_bot)
 
 
