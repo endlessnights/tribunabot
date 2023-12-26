@@ -307,7 +307,7 @@ def new_post(message):
                 p.save()
         except Exception as e:
             bot.send_message(message.chat.id,
-                             'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом')
+                             f'У вас нет доступа к этому боту. Нажмите /start для начала работы с ботом\nпокажите ошибку @pycarrot2: {e}')
             print(e)
     except Exception as e:
         print(e)
