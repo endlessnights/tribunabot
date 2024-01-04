@@ -56,8 +56,14 @@ bot_settings = BotSettings.objects.first()
 #   Функция для хранения message.id и при последующем вызове удаления его из бота, по факту - удаление пред. сообщений
 def delete_prev_message(message):
     if message.chat.id in last_user_message:
-        bot.delete_message(message.chat.id, last_user_message[message.chat.id])
-    bot.delete_message(message.chat.id, message.message_id)
+        try:
+            bot.delete_message(message.chat.id, last_user_message[message.chat.id])
+        except Exception as e:
+            print(f'def delete_prev_message[1]: {e}')
+    try:
+        bot.delete_message(message.chat.id, message.message_id)
+    except Exception as e:
+        print(f'def delete_prev_message[2]: {e}')
 
 
 #   Функция не используется, так как отказались от авторизации через клубного бота и по паролю
