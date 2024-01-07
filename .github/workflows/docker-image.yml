@@ -2,15 +2,16 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
   docker:
     runs-on: self-hosted
     steps:
-    - name: Checkout
-    - uses: actions/checkout@v3
-    - name: Deploy to host
-      run: |
-          cd tribunabot/core
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Deploy to host
+        run: |
+          cd tribunabot/core  # Change to the directory where your docker-compose.yml is located
           docker-compose up -d
