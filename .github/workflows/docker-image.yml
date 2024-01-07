@@ -7,6 +7,9 @@ on:
 jobs:
   docker:
     runs-on: self-hosted
+    env:
+      TELEGRAM_BOT_SECRET_TRIBUNA: ${{ secrets.TELEGRAM_BOT_SECRET_TRIBUNA }}
+      CLUB_SERVICE_TOKEN_OUTLINE_BOT: ${{ secrets.CLUB_SERVICE_TOKEN_OUTLINE_BOT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -23,4 +26,4 @@ jobs:
       - name: Deploy to host
         run: |
           cd core
-          docker compose up -d
+          TELEGRAM_BOT_SECRET_TRIBUNA=$TELEGRAM_BOT_SECRET_TRIBUNA CLUB_SERVICE_TOKEN_OUTLINE_BOT=$CLUB_SERVICE_TOKEN_OUTLINE_BOT docker compose up -d
