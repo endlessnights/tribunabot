@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "Current directory: $(pwd)"
 
-      # - name: Deploy to host
-      #   run: |
-      #     cd tribunabot/tribunabot/core
-      #     docker-compose up -d
+      - name: Deploy to host
+        run: |
+          cd core
+          docker-compose up -d
