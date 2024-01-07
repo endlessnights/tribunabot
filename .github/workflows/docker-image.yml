@@ -13,5 +13,5 @@ jobs:
 
       - name: Deploy to host
         run: |
-          cd tribunabot/core  # Change to the directory where your docker-compose.yml is located
+          cd tribunabot/tribunabot/core
           docker-compose up -d
