@@ -15,10 +15,10 @@ jobs:
         run: |
           source ~/.bashrc
 
-      - name: Delete old container and Image
-        run: |
-          docker rm tribuna_bot_django
-          docker rmi core-tribuna_bot
+#      - name: Delete old container and Image
+#        run: |
+#          docker rm tribuna_bot_django
+#          docker rmi core-tribuna_bot
 
       - name: Deploy to host
         run: |
