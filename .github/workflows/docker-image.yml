@@ -20,6 +20,7 @@ jobs:
 
       - name: Delete old container and Image
         run: |
+          docker stop tribuna_bot_django
           docker rm tribuna_bot_django
           docker rmi core-tribuna_bot
 
