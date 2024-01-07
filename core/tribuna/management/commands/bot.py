@@ -24,10 +24,7 @@ try:
     production = os.environ['PROD_TRIBUNA_BOT']
 except KeyError:
     print('NO PROD_TRIBUNA_BOT')
-try:
-    tg_token = os.environ['TELEGRAM_BOT_SECRET_TRIBUNA']
-except KeyError:
-    print('NO TELEGRAM_BOT_SECRET_TRIBUNA')
+tg_token = os.environ['TELEGRAM_BOT_SECRET_TRIBUNA']
 try:
     #   Токен для авторизации в клубном API
     club_service_token_os = os.environ['CLUB_SERVICE_TOKEN_OUTLINE_BOT']
