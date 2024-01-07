@@ -11,7 +11,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Deploy to host
+      - name: Display Repository Information
         run: |
-          cd tribunabot/tribunabot/core
-          docker-compose up -d
+          echo "Current directory: $(pwd)"
+
+      # - name: Deploy to host
+      #   run: |
+      #     cd tribunabot/tribunabot/core
+      #     docker-compose up -d
