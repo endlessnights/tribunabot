@@ -11,5 +11,4 @@ jobs:
     - name: Checkout
     - uses: actions/checkout@v3
     - name: Deploy to host
-    - run: |
-        docker compose up -d
+    - run: docker compose up -d
